@@ -5,7 +5,6 @@ from scipy.signal import savgol_filter
 from datetime import datetime
 from fpdf import FPDF
 import io
-
 # --- PASSWORD PROTECTION ---
 def check_password():
     """Returns True if the user had the correct password."""
@@ -170,5 +169,6 @@ if m_file and i_file:
             pdf.image(io.BytesIO(img), x=10, y=30, w=275)
         
         st.download_button("📥 Download PDF", data=pdf.output(), file_name=f"{reg}_Report.pdf", mime="application/pdf")
+
 
 
