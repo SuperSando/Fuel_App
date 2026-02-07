@@ -122,12 +122,12 @@ def create_plots(df_max, df_idle, opts, registration="", factor_label="", factor
     return fig_max, fig_idle
 
 # --- 6. STREAMLIT UI ---
-st.title("✈️ Fuel Pressure Diagnostic Tool")
+st.title("Fuel Pressure Diagnostic Tool")
 
 with st.sidebar:
     st.header("1. Aircraft Info")
-    reg = st.text_input("Registration", value="G-JONT")
-    rpm_drop = st.selectbox("Achieved RPM Drop", list(CORRECTION_MAP.keys()))
+    reg = st.text_input("Registration", value="")
+    rpm_drop = st.selectbox("RPM Correction", list(CORRECTION_MAP.keys()))
     st.divider()
     st.header("2. Analysis Options")
     un_p = st.checkbox("Non-Turbo UNM (28-30)", True)
@@ -166,3 +166,4 @@ if m_file and i_file:
                 file_name=f"{reg}_Report.pdf", 
                 mime="application/pdf"
             )
+
