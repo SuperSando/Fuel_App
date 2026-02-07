@@ -106,7 +106,7 @@ st.title("✈️ Fuel Pressure Diagnostic Tool")
 
 with st.sidebar:
     st.header("1. Aircraft Info")
-    reg = st.text_input("Registration", value="G-JONT")
+    reg = st.text_input("Registration", value="")
     rpm_drop = st.selectbox("Achieved RPM Drop", list(CORRECTION_MAP.keys()))
     st.divider()
     st.header("2. Bands")
@@ -139,3 +139,4 @@ if m_file and i_file:
             pdf.image(io.BytesIO(img), x=10, y=30, w=275)
         
         st.download_button("📥 Download PDF", data=pdf.output(), file_name=f"{reg}_Report.pdf", mime="application/pdf")
+
