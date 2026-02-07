@@ -65,8 +65,9 @@ def add_high_vis_label(fig, y_val, label_text, label_color, x_pos=0.01):
 # --- 5. CORE ENGINE ---
 def create_plots(df_max, df_idle, opts, registration="", factor_label="", factor=1.0):
     un_p, un_s, met_b, id_p, id_s = opts
-    m_low, m_high = 19.0 * factor, 21.3 * factor
+    met_low, met_high = 19.0 * factor, 21.3 * factor
     
+    # MAX RPM processing
     t_m, u_m, mt_m = df_max["Time (s)"], df_max["UNMETERED [PSI]"], df_max["METERED [PSI]"]
     u_sm, mt_sm = savgol_filter(u_m, 9, 3), savgol_filter(mt_m, 9, 3)
     
@@ -78,19 +79,30 @@ def create_plots(df_max, df_idle, opts, registration="", factor_label="", factor
         fig_max.add_shape(type="rect", x0=t_m.iloc[0], x1=t_m.iloc[-1], y0=28.0, y1=30.0, fillcolor="#32CD32", opacity=0.3, layer="below", line_width=0)
         add_high_vis_label(fig_max, 29.0, "Non-Turbo UNMETERED (28-30)", "#006400")
     if met_b:
-        fig_max.add_shape(type="rect", x0=t_m.iloc[0], x1=t_m.iloc[-1], y0=m_low, y1=m_high, fillcolor="#00BFFF", opacity=0.3, layer="below", line_width=1, line_color="#00008B")
-        add_high_vis_label(fig_max, (m_low+m_high)/2, f"METERED ({factor_label})", "#00008B")
+        fig_max.add_shape(type="rect", x0=t_m.iloc[0], x1=t_m.iloc[-1], y0=met_low, y1=met_high, fillcolor="#00BFFF", opacity=0.3, layer="below", line_width=1, line_color="#00008B")
+        add_high_vis_label(fig_max, (met_low+met_high)/2, f"METERED ({factor_label})", "#00008B")
         if factor != 1.0:
-            add_high_vis_label(fig_max, m_high, f"Max: {m_high:.2f}", "#00008B", x_pos=0.88)
-            add_high_vis_label(fig_max, m_low, f"Min: {m_low:.2f}", "#00008B", x_pos=0.88)
+            add_high_vis_label(fig_max, met_high, f"Max: {met_high:.2f}", "#00008B", x_pos=0.88)
+            add_high_vis_label(fig_max, met_low, f"Min: {met_low:.2f}", "#00008B", x_pos=0.88)
 
+    # High-Vis Traces
     fig_max.add_trace(go.Scatter(x=t_m, y=u_m, name="Raw UNM", line=dict(color="red", width=2, dash="dot"), hoverinfo="none"))
     fig_max.add_trace(go.Scatter(x=t_m, y=mt_m, name="Raw MET", line=dict(color="blue", width=2, dash="dot"), hoverinfo="none"))
     fig_max.add_trace(go.Scatter(x=t_m, y=u_sm, name="<b>Smooth UNM</b>", line=dict(color="#8B0000", width=3)))
     fig_max.add_trace(go.Scatter(x=t_m, y=mt_sm, name="<b>Smooth MET</b>", line=dict(color="#00008B", width=3)))
     
+    # PEAK MARKERS (Restored)
+    m_un, m_mt = u_sm.argmax(), mt_sm.argmax()
+    fig_max.add_trace(go.Scatter(x=[t_m.iloc[m_un]], y=[u_sm[m_un]], mode="markers+text", name="Max Smooth UNM", text=[f"<b>{u_sm[m_un]:.2f}</b>"], textposition="top center", marker=dict(color="#8B0000", size=12, line=dict(width=2, color="white"))))
+    fig_max.add_trace(go.Scatter(x=[t_m.iloc[m_mt]], y=[mt_sm[m_mt]], mode="markers+text", name="Max Smooth MET", text=[f"<b>{mt_sm[m_mt]:.2f}</b>"], textposition="top center", marker=dict(color="#00008B", size=12, line=dict(width=2, color="white"))))
+    
+    r_un, r_mt = u_m.argmax(), mt_m.argmax()
+    fig_max.add_trace(go.Scatter(x=[t_m.iloc[r_un]], y=[u_m.iloc[r_un]], mode="markers+text", name="Max Raw UNM", text=[f"{u_m.iloc[r_un]:.2f}"], textposition="bottom center", marker=dict(color="red", size=10, symbol="circle-open")))
+    fig_max.add_trace(go.Scatter(x=[t_m.iloc[r_mt]], y=[mt_m.iloc[r_mt]], mode="markers+text", name="Max Raw MET", text=[f"{mt_m.iloc[r_mt]:.2f}"], textposition="bottom center", marker=dict(color="blue", size=10, symbol="circle-open")))
+
     apply_high_contrast_style(fig_max, f"Max RPM Fuel Pressure - {registration}")
 
+    # --- IDLE RPM ---
     t_i, u_i = df_idle["Time (s)"], df_idle["UNMETERED [PSI]"]
     u_si = savgol_filter(u_i, 9, 3)
     fig_idle = go.Figure()
@@ -100,17 +112,22 @@ def create_plots(df_max, df_idle, opts, registration="", factor_label="", factor
 
     fig_idle.add_trace(go.Scatter(x=t_i, y=u_i, name="Raw UNM", line=dict(color="red", width=2, dash="dot"), hoverinfo="none"))
     fig_idle.add_trace(go.Scatter(x=t_i, y=u_si, name="<b>Smooth UNM</b>", line=dict(color="#8B0000", width=3)))
-    apply_high_contrast_style(fig_idle, f"Idle RPM Unmetered Pressure - {registration}")
+    
+    # IDLE PEAK MARKERS (Restored)
+    mi_un, mi_r = u_si.argmin(), u_i.argmin()
+    fig_idle.add_trace(go.Scatter(x=[t_i.iloc[mi_un]], y=[u_si[mi_un]], mode="markers+text", name="Min Smooth UNM", text=[f"<b>{u_si[mi_un]:.2f}</b>"], textposition="top center", marker=dict(color="#8B0000", size=12, line=dict(width=2, color="white"))))
+    fig_idle.add_trace(go.Scatter(x=[t_i.iloc[mi_r]], y=[u_i.iloc[mi_r]], mode="markers+text", name="Min Raw UNM", text=[f"{u_i.iloc[mi_r]:.2f}"], textposition="bottom center", marker=dict(color="red", size=10, symbol="circle-open")))
 
+    apply_high_contrast_style(fig_idle, f"Idle RPM Unmetered Pressure - {registration}")
     return fig_max, fig_idle
 
 # --- 6. STREAMLIT UI ---
-st.title("Fuel Pressure Diagnostic Tool")
+st.title("✈️ Fuel Pressure Diagnostic Tool")
 
 with st.sidebar:
     st.header("1. Aircraft Info")
-    reg = st.text_input("Registration", value="")
-    rpm_drop = st.selectbox("Achieved RPM", list(CORRECTION_MAP.keys()))
+    reg = st.text_input("Registration", value="G-JONT")
+    rpm_drop = st.selectbox("Achieved RPM Drop", list(CORRECTION_MAP.keys()))
     st.divider()
     st.header("2. Analysis Options")
     un_p = st.checkbox("Non-Turbo UNM (28-30)", True)
@@ -127,7 +144,6 @@ if m_file and i_file:
     df_m, df_i = pd.read_csv(m_file), pd.read_csv(i_file)
     f_m, f_id = create_plots(df_m, df_i, [un_p, un_s, met_b, id_p, id_s], reg, rpm_drop, CORRECTION_MAP[rpm_drop])
     
-    # NEW 2026 WIDTH SYNTAX
     st.plotly_chart(f_m, width="stretch")
     st.plotly_chart(f_id, width="stretch")
 
@@ -136,7 +152,6 @@ if m_file and i_file:
             pdf = FPDF(orientation='L', unit='mm', format='A4')
             ts = datetime.now().strftime("%Y-%m-%d %H:%M")
             for title, fig in [("Max RPM", f_m), ("Idle RPM", f_id)]:
-                # Static image export using the updated Kaleido
                 img_bytes = fig.to_image(format="png", width=1200, height=700, scale=2)
                 pdf.add_page()
                 pdf.set_font("Helvetica", "B", 16)
@@ -145,7 +160,6 @@ if m_file and i_file:
                 pdf.cell(0, 10, f"Condition: {rpm_drop} | Generated: {ts}", new_x="LMARGIN", new_y="NEXT")
                 pdf.image(io.BytesIO(img_bytes), x=10, y=35, w=275)
             
-            # FINAL FIX: Convert bytearray to bytes for the download button
             st.download_button(
                 label="📥 Download PDF Report", 
                 data=bytes(pdf.output()), 
