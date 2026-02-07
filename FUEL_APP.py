@@ -153,13 +153,20 @@ if m_file and i_file:
             pdf = FPDF(orientation='L', unit='mm', format='A4')
             ts = datetime.now().strftime("%Y-%m-%d %H:%M")
             for title, fig in [("Max RPM", f_m), ("Idle RPM", f_id)]:
+                # Use kaleido for static export
                 img_bytes = fig.to_image(format="png", width=1200, height=700, scale=2)
                 pdf.add_page()
                 pdf.set_font("Helvetica", "B", 16)
-                pdf.cell(0, 10, f"{title} | {reg}", ln=True)
+                # Updated cell positioning to remove deprecation warnings
+                pdf.cell(0, 10, f"{title} | {reg}", new_x="LMARGIN", new_y="NEXT")
                 pdf.set_font("Helvetica", "", 10)
-                pdf.cell(0, 10, f"Condition: {rpm_drop} | Generated: {ts}", ln=True)
+                pdf.cell(0, 10, f"Condition: {rpm_drop} | Generated: {ts}", new_x="LMARGIN", new_y="NEXT")
                 pdf.image(io.BytesIO(img_bytes), x=10, y=35, w=275)
             
-            st.download_button("📥 Download PDF Report", data=pdf.output(), file_name=f"{reg}_Report.pdf", mime="application/pdf")
-
+            # CRITICAL FIX: Cast bytearray to bytes for Streamlit download button
+            st.download_button(
+                label="📥 Download PDF Report", 
+                data=bytes(pdf.output()), 
+                file_name=f"{reg}_Report.pdf", 
+                mime="application/pdf"
+            )
