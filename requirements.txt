@@ -1,7 +1,6 @@
-streamlit
+streamlit>=1.42.0
 pandas
 plotly
 scipy
 fpdf2
-kaleido>=0.1.0post1
-altair>=5.0.0
+kaleido==0.1.0post1
