@@ -10,7 +10,7 @@ import os
 # --- APP CONFIG ---
 st.set_page_config(page_title="Fuel Analysis Tool", layout="wide")
 
-# --- DATA ---
+# --- CORRECTION DATA ---
 CORRECTION_MAP = {
     "Rated RPM (1.000)": 1.0,
     "-20 RPM (.991)": 0.991,
@@ -31,7 +31,14 @@ def apply_style(fig, title_text):
         yaxis=dict(gridcolor="#e5e5e5", linecolor="black", zeroline=True, zerolinewidth=2, ticksuffix=" PSI")
     )
 
-# --- ENGINE ---
+def add_high_vis_label(fig, y_val, label_text, label_color, x_pos=0.01):
+    fig.add_annotation(
+        xref="paper", x=x_pos, y=y_val, text=f"<b>{label_text}</b>",
+        showarrow=False, font=dict(color=label_color, size=11),
+        bgcolor="white", bordercolor=label_color, borderwidth=2, borderpad=6, xanchor="left"
+    )
+
+# --- CORE ENGINE ---
 def create_plots(df_max, df_idle, opts, reg="", factor_label="", factor=1.0):
     un_p, un_s, met_b, id_p, id_s = opts
     m_low, m_high = 19.0 * factor, 21.3 * factor
@@ -44,11 +51,12 @@ def create_plots(df_max, df_idle, opts, reg="", factor_label="", factor=1.0):
     if un_p: f_max.add_shape(type="rect", x0=t_m.iloc[0], x1=t_m.iloc[-1], y0=28.0, y1=30.0, fillcolor="#32CD32", opacity=0.3, layer="below")
     if met_b: 
         f_max.add_shape(type="rect", x0=t_m.iloc[0], x1=t_m.iloc[-1], y0=m_low, y1=m_high, fillcolor="#00BFFF", opacity=0.3, layer="below")
+        add_high_vis_label(f_max, (m_low+m_high)/2, f"METERED ({factor_label})", "#00008B")
         if factor != 1.0:
-            f_max.add_annotation(xref="paper", x=0.9, y=m_high, text=f"Max: {m_high:.2f}", showarrow=False, bgcolor="white")
-            f_max.add_annotation(xref="paper", x=0.9, y=m_low, text=f"Min: {m_low:.2f}", showarrow=False, bgcolor="white")
+            add_high_vis_label(f_max, m_high, f"Max: {m_high:.2f}", "#00008B", x_pos=0.88)
+            add_high_vis_label(f_max, m_low, f"Min: {m_low:.2f}", "#00008B", x_pos=0.88)
 
-    f_max.add_trace(go.Scatter(x=t_m, y=u_m, name="Raw UNM", line=dict(color="red", width=1.5, dash="dot")))
+    f_max.add_trace(go.Scatter(x=t_m, y=u_m, name="Raw UNM", line=dict(color="red", width=2, dash="dot")))
     f_max.add_trace(go.Scatter(x=t_m, y=u_sm, name="<b>Smooth UNM</b>", line=dict(color="#8B0000", width=3)))
     f_max.add_trace(go.Scatter(x=t_m, y=mt_sm, name="<b>Smooth MET</b>", line=dict(color="#00008B", width=3)))
     
@@ -59,7 +67,7 @@ def create_plots(df_max, df_idle, opts, reg="", factor_label="", factor=1.0):
     u_si = savgol_filter(u_i, 9, 3)
     f_idle = go.Figure()
     if id_p: f_idle.add_shape(type="rect", x0=t_i.iloc[0], x1=t_i.iloc[-1], y0=8.0, y1=10.0, fillcolor="#32CD32", opacity=0.3, layer="below")
-    f_idle.add_trace(go.Scatter(x=t_i, y=u_i, name="Raw UNM", line=dict(color="red", width=1.5, dash="dot")))
+    f_idle.add_trace(go.Scatter(x=t_i, y=u_i, name="Raw UNM", line=dict(color="red", width=2, dash="dot")))
     f_idle.add_trace(go.Scatter(x=t_i, y=u_si, name="<b>Smooth UNM</b>", line=dict(color="#8B0000", width=3)))
     apply_style(f_idle, f"Idle RPM Fuel Pressure - {reg}")
 
@@ -85,20 +93,34 @@ m_file = c1.file_uploader("Upload Max RPM CSV", type="csv")
 i_file = c2.file_uploader("Upload Idle RPM CSV", type="csv")
 
 if m_file and i_file:
-    df_m, df_i = pd.read_csv(m_file), pd.read_csv(i_file)
-    f_m, f_id = create_plots(df_m, df_i, opts, reg, rpm_drop, CORRECTION_MAP[rpm_drop])
-    
-    st.plotly_chart(f_m, use_container_width=True)
-    st.plotly_chart(f_id, use_container_width=True)
-
-    # PDF Download
-    if st.button("Prepare PDF Report"):
-        pdf = FPDF(orientation='L', unit='mm', format='A4')
-        for title, fig in [("Max RPM", f_m), ("Idle RPM", f_id)]:
-            img = fig.to_image(format="png", width=1200, height=700, scale=2)
-            pdf.add_page()
-            pdf.set_font("Helvetica", "B", 16)
-            pdf.cell(0, 10, f"{title} | {reg}", ln=True)
-            pdf.image(io.BytesIO(img), x=10, y=30, w=275)
+    try:
+        df_m = pd.read_csv(m_file)
+        df_i = pd.read_csv(i_file)
         
-        st.download_button("📥 Download PDF", data=pdf.output(dest='S'), file_name=f"{reg}_Report.pdf")
+        # Validation
+        required = ["Time (s)", "UNMETERED [PSI]", "METERED [PSI]"]
+        if not all(col in df_m.columns for col in required):
+            st.error(f"Max RPM CSV missing required columns: {required}")
+        else:
+            f_m, f_id = create_plots(df_m, df_i, opts, reg, rpm_drop, CORRECTION_MAP[rpm_drop])
+            
+            st.plotly_chart(f_m, use_container_width=True)
+            st.plotly_chart(f_id, use_container_width=True)
+
+            # PDF Download
+            if st.button("Generate PDF Report"):
+                with st.spinner("Processing PDF..."):
+                    pdf = FPDF(orientation='L', unit='mm', format='A4')
+                    for title, fig in [("Max RPM", f_m), ("Idle RPM", f_id)]:
+                        # Web-safe image generation
+                        img_bytes = fig.to_image(format="png", width=1200, height=700, scale=2)
+                        pdf.add_page()
+                        pdf.set_font("Helvetica", "B", 16)
+                        pdf.cell(0, 10, f"{title} | {reg}", ln=True)
+                        pdf.image(io.BytesIO(img_bytes), x=10, y=30, w=275)
+                    
+                    # fpdf2 uses a different output method for bytes
+                    pdf_output = pdf.output()
+                    st.download_button("📥 Download PDF", data=bytes(pdf_output), file_name=f"{reg}_Report.pdf", mime="application/pdf")
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
