@@ -6,7 +6,7 @@ from datetime import datetime
 from fpdf import FPDF
 import io
 
-# --- 1. CONFIGURATION (MUST BE FIRST) ---
+# --- 1. CONFIGURATION (2026 UPDATED) ---
 st.set_page_config(page_title="Fuel Analysis Tool", layout="wide")
 
 # --- 2. PASSWORD GATEKEEPER ---
@@ -91,7 +91,7 @@ def create_plots(df_max, df_idle, opts, registration="", factor_label="", factor
     fig_max.add_trace(go.Scatter(x=t_m, y=u_sm, name="<b>Smooth UNM</b>", line=dict(color="#8B0000", width=3)))
     fig_max.add_trace(go.Scatter(x=t_m, y=mt_sm, name="<b>Smooth MET</b>", line=dict(color="#00008B", width=3)))
     
-    # Markers
+    # Peak Markers
     m_un, m_mt = u_sm.argmax(), mt_sm.argmax()
     fig_max.add_trace(go.Scatter(x=[t_m.iloc[m_un]], y=[u_sm[m_un]], mode="markers+text", name="Max Smooth UNM", text=[f"<b>{u_sm[m_un]:.2f}</b>"], textposition="top center", marker=dict(color="#8B0000", size=12, line=dict(width=2, color="white"))))
     fig_max.add_trace(go.Scatter(x=[t_m.iloc[m_mt]], y=[mt_sm[m_mt]], mode="markers+text", name="Max Smooth MET", text=[f"<b>{mt_sm[m_mt]:.2f}</b>"], textposition="top center", marker=dict(color="#00008B", size=12, line=dict(width=2, color="white"))))
@@ -117,7 +117,7 @@ def create_plots(df_max, df_idle, opts, registration="", factor_label="", factor
     fig_idle.add_trace(go.Scatter(x=[t_i.iloc[mi_un]], y=[u_si[mi_un]], mode="markers+text", name="Min Smooth UNM", text=[f"<b>{u_si[mi_un]:.2f}</b>"], textposition="top center", marker=dict(color="#8B0000", size=12, line=dict(width=2, color="white"))))
     fig_idle.add_trace(go.Scatter(x=[t_i.iloc[mi_r]], y=[u_i.iloc[mi_r]], mode="markers+text", name="Min Raw UNM", text=[f"{u_i.iloc[mi_r]:.2f}"], textposition="bottom center", marker=dict(color="red", size=10, symbol="circle-open")))
 
-    apply_high_contrast_style(fig_idle, f"Idle RPM Fuel Pressure - {registration}")
+    apply_high_contrast_style(fig_idle, f"Idle RPM Unmetered Pressure - {registration}")
     return fig_max, fig_idle
 
 # --- 6. STREAMLIT UI ---
@@ -126,7 +126,7 @@ st.title("Fuel Pressure Diagnostic Tool")
 with st.sidebar:
     st.header("1. Aircraft & Correction")
     reg = st.text_input("Registration", value="")
-    rpm_drop = st.selectbox("Achieved RPM Drop", list(CORRECTION_MAP.keys()))
+    rpm_drop = st.selectbox("Achieved RPM", list(CORRECTION_MAP.keys()))
     st.divider()
     st.header("2. Analysis Options")
     un_p = st.checkbox("Non-Turbo UNM (28-30)", True)
@@ -145,28 +145,22 @@ if m_file and i_file:
     
     f_m, f_id = create_plots(df_m, df_i, [un_p, un_s, met_b, id_p, id_s], reg, rpm_drop, CORRECTION_MAP[rpm_drop])
     
-    st.plotly_chart(f_m, use_container_width=True)
-    st.plotly_chart(f_id, use_container_width=True)
+    # 2026-READY WIDTH SETTING
+    st.plotly_chart(f_m, width='stretch')
+    st.plotly_chart(f_id, width='stretch')
 
     if st.button("Generate PDF Report"):
         with st.spinner("Preparing PDF..."):
             pdf = FPDF(orientation='L', unit='mm', format='A4')
             ts = datetime.now().strftime("%Y-%m-%d %H:%M")
             for title, fig in [("Max RPM", f_m), ("Idle RPM", f_id)]:
-                # Use kaleido for static export
-                img_bytes = fig.to_image(format="png", width=1200, height=700, scale=2)
+                # USES CLASSIC KALEIDO ENGINE (No Chrome required)
+                img_bytes = fig.to_image(format="png", width=1200, height=700, engine="kaleido")
                 pdf.add_page()
                 pdf.set_font("Helvetica", "B", 16)
-                # Updated cell positioning to remove deprecation warnings
                 pdf.cell(0, 10, f"{title} | {reg}", new_x="LMARGIN", new_y="NEXT")
                 pdf.set_font("Helvetica", "", 10)
                 pdf.cell(0, 10, f"Condition: {rpm_drop} | Generated: {ts}", new_x="LMARGIN", new_y="NEXT")
                 pdf.image(io.BytesIO(img_bytes), x=10, y=35, w=275)
             
-            # CRITICAL FIX: Cast bytearray to bytes for Streamlit download button
-            st.download_button(
-                label="📥 Download PDF Report", 
-                data=bytes(pdf.output()), 
-                file_name=f"{reg}_Report.pdf", 
-                mime="application/pdf"
-            )
+            st.download_button("📥 Download PDF Report", data=bytes(pdf.output()), file_name=f"{reg}_Report.pdf", mime="application/pdf")
