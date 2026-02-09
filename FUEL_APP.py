@@ -6,8 +6,26 @@ from datetime import datetime
 from fpdf import FPDF
 import io
 
-# --- 1. CONFIGURATION ---
+# --- 1. CONFIGURATION (STRICT ORDER) ---
 st.set_page_config(page_title="Fuel Analysis Tool", layout="wide")
+
+# --- FORCE LIGHT MODE CSS ---
+st.markdown("""
+    <style>
+        /* Force main background to white */
+        .stApp {
+            background-color: white !important;
+        }
+        /* Force sidebar color */
+        section[data-testid="stSidebar"] {
+            background-color: #f0f2f6 !important;
+        }
+        /* Ensure all text is dark */
+        p, h1, h2, h3, label {
+            color: #31333f !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- 2. PASSWORD GATEKEEPER ---
 def password_entered():
@@ -32,7 +50,7 @@ def check_password():
 if not check_password():
     st.stop() 
 
-# --- 3. CORRECTION DATA ---
+# --- 3. DATA & CORRECTION TABLES ---
 CORRECTION_MAP = {
     "Rated RPM (1.000)": 1.0,
     "-20 RPM (.991)": 0.991,
@@ -47,6 +65,8 @@ CORRECTION_MAP = {
 def apply_high_contrast_style(fig, title_text):
     fig.update_layout(
         template="plotly_white",
+        paper_bgcolor="white",
+        plot_bgcolor="white",
         title={'text': f"<b>{title_text}</b>", 'y': 0.95, 'x': 0.5, 'xanchor': 'center', 'font': {'size': 22, 'color': '#000'}},
         hovermode="x",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=12, color="black")),
@@ -67,7 +87,6 @@ def create_plots(df_max, df_idle, opts, registration="", factor_label="", factor
     un_p, un_s, met_b, id_p, id_s = opts
     met_low, met_high = 19.0 * factor, 21.3 * factor
     
-    # MAX RPM processing
     t_m, u_m, mt_m = df_max["Time (s)"], df_max["UNMETERED [PSI]"], df_max["METERED [PSI]"]
     u_sm, mt_sm = savgol_filter(u_m, 9, 3), savgol_filter(mt_m, 9, 3)
     
@@ -85,7 +104,6 @@ def create_plots(df_max, df_idle, opts, registration="", factor_label="", factor
             add_high_vis_label(fig_max, met_high, f"Max: {met_high:.2f}", "#00008B", x_pos=0.88)
             add_high_vis_label(fig_max, met_low, f"Min: {met_low:.2f}", "#00008B", x_pos=0.88)
 
-    # Traces
     fig_max.add_trace(go.Scatter(x=t_m, y=u_m, name="Raw UNM", line=dict(color="red", width=2, dash="dot"), hoverinfo="none"))
     fig_max.add_trace(go.Scatter(x=t_m, y=mt_m, name="Raw MET", line=dict(color="blue", width=2, dash="dot"), hoverinfo="none"))
     fig_max.add_trace(go.Scatter(x=t_m, y=u_sm, name="<b>Smooth UNM</b>", line=dict(color="#8B0000", width=3)))
@@ -102,7 +120,6 @@ def create_plots(df_max, df_idle, opts, registration="", factor_label="", factor
 
     apply_high_contrast_style(fig_max, f"Max RPM Fuel Pressure - {registration}")
 
-    # --- IDLE RPM ---
     t_i, u_i = df_idle["Time (s)"], df_idle["UNMETERED [PSI]"]
     u_si = savgol_filter(u_i, 9, 3)
     fig_idle = go.Figure()
@@ -121,12 +138,12 @@ def create_plots(df_max, df_idle, opts, registration="", factor_label="", factor
     return fig_max, fig_idle
 
 # --- 6. UI ---
-st.title("Fuel Pressure Diagnostic Tool")
+st.title("✈️ Fuel Pressure Diagnostic Tool")
 
 with st.sidebar:
     st.header("1. Aircraft Info")
-    reg = st.text_input("Registration", value="")
-    rpm_drop = st.selectbox("RPM Correction", list(CORRECTION_MAP.keys()))
+    reg = st.text_input("Registration", value="G-JONT")
+    rpm_drop = st.selectbox("Achieved RPM Drop", list(CORRECTION_MAP.keys()))
     st.divider()
     st.header("2. Analysis Options")
     opts = [st.checkbox("Non-Turbo UNM (28-30)", True), 
@@ -154,7 +171,6 @@ if m_file and i_file:
                 img_bytes = fig.to_image(format="png", width=1200, height=700, scale=2)
                 pdf.add_page()
                 pdf.set_font("Helvetica", "B", 16)
-                # Clean Header: No correction factors in title
                 pdf.cell(0, 10, f"{title} | {reg}", new_x="LMARGIN", new_y="NEXT")
                 pdf.set_font("Helvetica", "", 10)
                 pdf.cell(0, 10, f"Generated: {ts}", new_x="LMARGIN", new_y="NEXT")
