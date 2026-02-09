@@ -138,17 +138,17 @@ def create_plots(df_max, df_idle, opts, registration="", factor_label="", factor
     return fig_max, fig_idle
 
 # --- 6. UI ---
-st.title("✈️ Fuel Pressure Diagnostic Tool")
+st.title("Fuel Pressure Diagnostic Tool")
 
 with st.sidebar:
     st.header("1. Aircraft Info")
-    reg = st.text_input("Registration", value="G-JONT")
-    rpm_drop = st.selectbox("Achieved RPM Drop", list(CORRECTION_MAP.keys()))
+    reg = st.text_input("Registration", value="")
+    rpm_drop = st.selectbox("RPM Correction", list(CORRECTION_MAP.keys()))
     st.divider()
     st.header("2. Analysis Options")
     opts = [st.checkbox("Non-Turbo UNM (28-30)", True), 
             st.checkbox("Turbo UNM (21-24)", False), 
-            st.checkbox("Metered (19-21.3)", True), 
+            st.checkbox("Non-Turbo Metered (19-21.3)", True), 
             st.checkbox("Idle Non-Turbo (8-10)", True), 
             st.checkbox("Idle Turbo (7-9)", False)]
 
@@ -177,3 +177,4 @@ if m_file and i_file:
                 pdf.image(io.BytesIO(img_bytes), x=10, y=35, w=275)
             
             st.download_button("📥 Download PDF Report", data=bytes(pdf.output()), file_name=f"{reg}_Report.pdf", mime="application/pdf")
+
