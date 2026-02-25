@@ -93,11 +93,11 @@ with st.sidebar:
     )
     
     if engine_type == "Naturally Aspirated":
-        rpm_drop = st.selectbox("RPM Correction Table", list(CORRECTION_MAP.keys()))
-        factor = CORRECTION_MAP[rpm_drop]
+        rpm_drop_label = st.selectbox("RPM Correction Table", list(CORRECTION_MAP.keys()))
+        factor = CORRECTION_MAP[rpm_drop_label]
     else:
         factor = 1.0 
-        rpm_drop = "N/A"
+        rpm_drop_label = "N/A"
 
 is_turbo = (engine_type == "Turbocharged")
 
@@ -167,10 +167,17 @@ if st.session_state.get("graph_ready"):
                 us, ms = savgol_filter(u, 9, 3), savgol_filter(m, 9, 3)
                 fig = go.Figure()
                 fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=28, y1=30, fillcolor="#32CD32", opacity=0.3)
-                ml, mh = 19.0*factor, 21.3*factor
+                
+                # Dynamic Metered Range Calculation
+                ml, mh = 19.0 * factor, 21.3 * factor
+                
                 fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=ml, y1=mh, fillcolor="#00BFFF", opacity=0.3)
                 add_label(fig, 29, "UNMETERED (28-30)", "#006400")
-                add_label(fig, (ml+mh)/2, f"METERED ({rpm_drop})", "#00008B")
+                
+                # Updated Label with Numerical Range
+                metered_label_text = f"METERED ({rpm_drop_label}): {ml:.2f} - {mh:.2f} PSI"
+                add_label(fig, (ml+mh)/2, metered_label_text, "#00008B")
+                
                 fig.add_trace(go.Scatter(x=t, y=u, name="Raw UNM", line=dict(color="red", width=2, dash="dot")))
                 fig.add_trace(go.Scatter(x=t, y=m, name="Raw MET", line=dict(color="blue", width=2, dash="dot")))
                 fig.add_trace(go.Scatter(x=t, y=us, name="Smooth UNM", line=dict(color="#8B0000", width=3)))
