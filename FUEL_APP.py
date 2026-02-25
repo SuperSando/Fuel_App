@@ -72,13 +72,12 @@ with st.sidebar:
     reg = st.text_input("Registration", value="")
     engine_type = st.radio("Engine Type", ["Naturally Aspirated", "Turbocharged"])
     
-    # Correction Table only shows for NA
     if engine_type == "Naturally Aspirated":
         rpm_drop = st.selectbox("RPM Correction Table", list(CORRECTION_MAP.keys()))
         factor = CORRECTION_MAP[rpm_drop]
     else:
-        factor = 1.0 # Static for Turbo
-        rpm_drop = "Standard (No Correction)"
+        factor = 1.0 
+        rpm_drop = "N/A"
 
 is_turbo = (engine_type == "Turbocharged")
 charts = []
@@ -91,21 +90,19 @@ if is_turbo:
 
     if f_met and f_unm and f_idl:
         try:
-            # 1. Max Metered (Strict Column D, No Correction)
+            # 1. Max Metered (Clean: No Banding)
             df1 = pd.read_csv(f_met)
             t1, p1 = df1.iloc[:, 0], df1.iloc[:, 3]
             ps1 = savgol_filter(p1, 9, 3)
             fig1 = go.Figure()
-            # Turbo always 19.0 - 21.3
-            fig1.add_shape(type="rect", x0=t1.iloc[0], x1=t1.iloc[-1], y0=19.0, y1=21.3, fillcolor="#00BFFF", opacity=0.3)
-            add_label(fig1, 20.15, "METERED (19.0 - 21.3)", "#00008B")
+            # NO BANDS HERE
             fig1.add_trace(go.Scatter(x=t1, y=p1, name="Raw MET", line=dict(color="blue", width=2, dash="dot")))
             fig1.add_trace(go.Scatter(x=t1, y=ps1, name="<b>Smooth MET</b>", line=dict(color="#00008B", width=3)))
             add_peak_marker(fig1, t1, ps1, "Peak MET", "#00008B")
             apply_style(fig1, f"Max RPM Metered Pressure - {reg}")
             charts.append(("Max RPM Metered", fig1))
 
-            # 2. Max Unmetered (Strict UNMETERED Name)
+            # 2. Max Unmetered (Banding Kept)
             df2 = pd.read_csv(f_unm)
             t2 = df2.iloc[:, 0]
             unm_col_max = [c for c in df2.columns if "UNMETERED" in c.upper()][0]
@@ -119,7 +116,7 @@ if is_turbo:
             apply_style(fig2, f"Max RPM Unmetered Pressure - {reg}")
             charts.append(("Max RPM Unmetered", fig2))
 
-            # 3. Idle (Strict UNMETERED Name)
+            # 3. Idle (Banding Kept)
             df3 = pd.read_csv(f_idl)
             t3 = df3.iloc[:, 0]
             unm_col_idl = [c for c in df3.columns if "UNMETERED" in c.upper()][0]
@@ -132,10 +129,10 @@ if is_turbo:
             add_peak_marker(fig3, t3, ps3, "Min PSI", "#8B0000", is_min=True)
             apply_style(fig3, f"Idle RPM Check - {reg}")
             charts.append(("Idle RPM", fig3))
-        except: st.error("⚠️ Header/Column Mismatch. Metered requires Col D; Unmetered/Idle require 'UNMETERED' header.")
+        except: st.error("⚠️ Formatting Error. Metered needs Col D; Unmetered/Idle need 'UNMETERED' header.")
 
 else:
-    # Naturally Aspirated logic (With active correction table)
+    # Naturally Aspirated logic remains fully featured
     c1, c2 = st.columns(2)
     f_max, f_idl = c1.file_uploader("Upload Max RPM Data", type="csv"), c2.file_uploader("Upload Idle RPM Data", type="csv")
 
@@ -169,7 +166,7 @@ else:
             add_peak_marker(fig2, t2, ps2, "Min PSI", "#8B0000", is_min=True)
             apply_style(fig2, f"NA Idle Check - {reg}")
             charts.append(("Idle RPM", fig2))
-        except: st.warning("⚠️ NA Headers Mismatch.")
+        except: st.warning("⚠️ NA Header Format Error.")
 
 # --- 6. RENDER & PDF ---
 for title, fig in charts: st.plotly_chart(fig, use_container_width=True)
