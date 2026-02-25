@@ -52,6 +52,15 @@ def add_label(fig, y, text, color, x=0.01):
     fig.add_annotation(xref="paper", x=x, y=y, text=f"<b>{text}</b>", showarrow=False, 
                        font=dict(color=color, size=11), bgcolor="white", bordercolor=color, borderwidth=2, borderpad=6)
 
+def add_peak_marker(fig, x_data, y_data, name, color, is_min=False):
+    idx = y_data.argmin() if is_min else y_data.argmax()
+    fig.add_trace(go.Scatter(
+        x=[x_data.iloc[idx]], y=[y_data[idx]],
+        mode="markers+text", name=name,
+        text=[f"<b>{y_data[idx]:.2f}</b>"], textposition="top center",
+        marker=dict(color=color, size=12, line=dict(width=2, color="white"))
+    ))
+
 # --- 5. UI LAYOUT ---
 try: st.sidebar.image("logo.png", width=180)
 except: pass
@@ -76,51 +85,51 @@ if is_turbo:
 
     if f_met and f_unm and f_idl:
         try:
-            # 1. Max Metered (Using Column D Logic)
+            # 1. Max Metered
             df1 = pd.read_csv(f_met)
             t1, p1 = df1.iloc[:, 0], df1.iloc[:, 3]
             ps1 = savgol_filter(p1, 9, 3)
             fig1 = go.Figure()
             m_low, m_high = 19.0 * factor, 21.3 * factor
-            fig1.add_shape(type="rect", x0=t1.iloc[0], x1=t1.iloc[-1], y0=m_low, y1=m_high, fillcolor="#00BFFF", opacity=0.3, layer="below")
+            fig1.add_shape(type="rect", x0=t1.iloc[0], x1=t1.iloc[-1], y0=m_low, y1=m_high, fillcolor="#00BFFF", opacity=0.3)
             add_label(fig1, (m_low+m_high)/2, f"METERED ({rpm_drop})", "#00008B")
             fig1.add_trace(go.Scatter(x=t1, y=p1, name="Raw MET", line=dict(color="blue", width=2, dash="dot")))
             fig1.add_trace(go.Scatter(x=t1, y=ps1, name="<b>Smooth MET</b>", line=dict(color="#00008B", width=3)))
+            add_peak_marker(fig1, t1, ps1, "Peak MET", "#00008B")
             apply_style(fig1, f"Max RPM Metered Pressure - {reg}")
             charts.append(("Max RPM Metered", fig1))
 
-            # 2. Max Unmetered (Using Named Column logic)
+            # 2. Max Unmetered
             df2 = pd.read_csv(f_unm)
             t2 = df2.iloc[:, 0]
             unm_col = [c for c in df2.columns if "UNMETERED" in c.upper() or "DIFFERENTIAL" in c.upper()][0]
-            p2 = df2[unm_col]
-            ps2 = savgol_filter(p2, 9, 3)
+            p2, ps2 = df2[unm_col], savgol_filter(df2[unm_col], 9, 3)
             fig2 = go.Figure()
-            fig2.add_shape(type="rect", x0=t2.iloc[0], x1=t2.iloc[-1], y0=21.0, y1=24.0, fillcolor="#FFD700", opacity=0.3, layer="below")
+            fig2.add_shape(type="rect", x0=t2.iloc[0], x1=t2.iloc[-1], y0=21.0, y1=24.0, fillcolor="#FFD700", opacity=0.3)
             add_label(fig2, 22.5, "Turbo UNMETERED (21-24)", "#8B4513")
             fig2.add_trace(go.Scatter(x=t2, y=p2, name="Raw UNM", line=dict(color="red", width=2, dash="dot")))
             fig2.add_trace(go.Scatter(x=t2, y=ps2, name="<b>Smooth UNM</b>", line=dict(color="#8B0000", width=3)))
+            add_peak_marker(fig2, t2, ps2, "Peak UNM", "#8B0000")
             apply_style(fig2, f"Max RPM Unmetered Pressure - {reg}")
             charts.append(("Max RPM Unmetered", fig2))
 
-            # 3. Idle (Column D)
+            # 3. Idle
             df3 = pd.read_csv(f_idl)
             t3, p3 = df3.iloc[:, 0], df3.iloc[:, 3]
             ps3 = savgol_filter(p3, 9, 3)
             fig3 = go.Figure()
-            fig3.add_shape(type="rect", x0=t3.iloc[0], x1=t3.iloc[-1], y0=7.0, y1=9.0, fillcolor="#FFD700", opacity=0.3, layer="below")
+            fig3.add_shape(type="rect", x0=t3.iloc[0], x1=t3.iloc[-1], y0=7.0, y1=9.0, fillcolor="#FFD700", opacity=0.3)
             add_label(fig3, 8.0, "Turbo Idle (7-9)", "#8B4513")
             fig3.add_trace(go.Scatter(x=t3, y=p3, name="Raw Idle", line=dict(color="red", width=2, dash="dot")))
             fig3.add_trace(go.Scatter(x=t3, y=ps3, name="<b>Smooth Idle</b>", line=dict(color="#8B0000", width=3)))
+            add_peak_marker(fig3, t3, ps3, "Min PSI", "#8B0000", is_min=True)
             apply_style(fig3, f"Idle RPM Check - {reg}")
             charts.append(("Idle RPM", fig3))
-        except Exception as e:
-            st.warning("⚠️ Data Mismatch: Ensure Column A is Time and Column D is Pressure.")
+        except: st.warning("⚠️ Turbo Data Mismatch.")
 
 else:
     c1, c2 = st.columns(2)
-    f_max = c1.file_uploader("Upload Max RPM Data", type="csv")
-    f_idl = c2.file_uploader("Upload Idle RPM Data", type="csv")
+    f_max, f_idl = c1.file_uploader("Upload Max RPM Data", type="csv"), c2.file_uploader("Upload Idle RPM Data", type="csv")
 
     if f_max and f_idl:
         try:
@@ -129,14 +138,14 @@ else:
             us1, ms1 = savgol_filter(u1, 9, 3), savgol_filter(m1, 9, 3)
             fig1 = go.Figure()
             fig1.add_shape(type="rect", x0=t1.iloc[0], x1=t1.iloc[-1], y0=28, y1=30, fillcolor="#32CD32", opacity=0.3)
-            add_label(fig1, 29, "UNMETERED (28-30)", "#006400")
             ml, mh = 19.0*factor, 21.3*factor
             fig1.add_shape(type="rect", x0=t1.iloc[0], x1=t1.iloc[-1], y0=ml, y1=mh, fillcolor="#00BFFF", opacity=0.3)
-            add_label(fig1, (ml+mh)/2, f"METERED ({rpm_drop})", "#00008B")
             fig1.add_trace(go.Scatter(x=t1, y=u1, name="Raw UNM", line=dict(color="red", width=2, dash="dot")))
             fig1.add_trace(go.Scatter(x=t1, y=m1, name="Raw MET", line=dict(color="blue", width=2, dash="dot")))
             fig1.add_trace(go.Scatter(x=t1, y=us1, name="Smooth UNM", line=dict(color="#8B0000", width=3)))
             fig1.add_trace(go.Scatter(x=t1, y=ms1, name="Smooth MET", line=dict(color="#00008B", width=3)))
+            add_peak_marker(fig1, t1, us1, "Peak UNM", "#8B0000")
+            add_peak_marker(fig1, t1, ms1, "Peak MET", "#00008B")
             apply_style(fig1, f"NA Max RPM Performance - {reg}")
             charts.append(("Max RPM Analysis", fig1))
 
@@ -144,24 +153,21 @@ else:
             ps2 = savgol_filter(p2, 9, 3)
             fig2 = go.Figure()
             fig2.add_shape(type="rect", x0=t2.iloc[0], x1=t2.iloc[-1], y0=8, y1=10, fillcolor="#32CD32", opacity=0.3)
-            add_label(fig2, 9, "NA Idle (8-10)", "#006400")
             fig2.add_trace(go.Scatter(x=t2, y=p2, name="Raw Idle", line=dict(color="red", width=2, dash="dot")))
             fig2.add_trace(go.Scatter(x=t2, y=ps2, name="Smooth Idle", line=dict(color="#8B0000", width=3)))
+            add_peak_marker(fig2, t2, ps2, "Min PSI", "#8B0000", is_min=True)
             apply_style(fig2, f"NA Idle Check - {reg}")
             charts.append(("Idle RPM", fig2))
-        except: st.warning("⚠️ Headers not recognized for NA mode.")
+        except: st.warning("⚠️ NA Headers Mismatch.")
 
-# --- 6. RENDER & PDF ---
-for title, fig in charts:
-    st.plotly_chart(fig, use_container_width=True)
+# --- 6. RENDER ---
+for title, fig in charts: st.plotly_chart(fig, use_container_width=True)
 
 if charts and st.button("Generate Airworthiness Report"):
-    with st.spinner("Compiling PDF..."):
-        pdf = FPDF(orientation='L', unit='mm', format='A4')
-        for title, fig in charts:
-            img = fig.to_image(format="png", width=1200, height=700, scale=2)
-            pdf.add_page()
-            pdf.set_font("Helvetica", "B", 16)
-            pdf.cell(0, 10, f"{title} | {reg}", new_x="LMARGIN", new_y="NEXT")
-            pdf.image(io.BytesIO(img), x=10, y=30, w=275)
-        st.download_button("📥 Download PDF", data=bytes(pdf.output()), file_name=f"{reg}_Fuel_Report.pdf")
+    pdf = FPDF(orientation='L', unit='mm', format='A4')
+    for title, fig in charts:
+        img = fig.to_image(format="png", width=1200, height=700, scale=2)
+        pdf.add_page(); pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(0, 10, f"{title} | {reg}", new_x="LMARGIN", new_y="NEXT")
+        pdf.image(io.BytesIO(img), x=10, y=30, w=275)
+    st.download_button("📥 Download PDF", data=bytes(pdf.output()), file_name=f"{reg}_Fuel_Report.pdf")
