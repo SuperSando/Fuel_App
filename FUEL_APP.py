@@ -9,11 +9,25 @@ import io
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Fuel Analysis Tool", layout="wide")
 
+# Custom CSS for Light Mode and Button Legibility
 st.markdown("""
     <style>
         .stApp { background-color: white !important; }
         section[data-testid="stSidebar"] { background-color: #f0f2f6 !important; }
         p, h1, h2, h3, label { color: #31333f !important; }
+        
+        /* Custom Button Styling: Light Background, Dark Text */
+        div.stButton > button:first-child {
+            background-color: #e0e6ed;
+            color: #1a1c23;
+            border: 1px solid #ccd4dc;
+            font-weight: bold;
+        }
+        div.stButton > button:hover {
+            background-color: #d1d9e2;
+            border: 1px solid #1a1c23;
+            color: #1a1c23;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -94,7 +108,7 @@ else:
     files = {"NA_MAX": f_na_max, "NA_IDLE": f_na_idl}
 
 # --- 6. ACTION BUTTON ---
-if st.button("🚀 Graph Uploaded Data", type="primary"):
+if st.button("Graph Uploaded Data"):
     charts = []
     
     try:
@@ -189,7 +203,7 @@ if "current_charts" in st.session_state:
     for title, fig in st.session_state["current_charts"]:
         st.plotly_chart(fig, use_container_width=True)
 
-    if st.button("📄 Generate Report from Current Graphs"):
+    if st.button("Generate Report from Current Graphs"):
         pdf = FPDF(orientation='L', unit='mm', format='A4')
         for title, fig in st.session_state["current_charts"]:
             img = fig.to_image(format="png", width=1200, height=700, scale=2)
