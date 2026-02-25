@@ -73,19 +73,30 @@ def add_peak_marker(fig, x_data, y_data, name, color, is_min=False):
         marker=dict(color=color, size=12, line=dict(width=2, color="white"))
     ))
 
-# --- 5. UI LAYOUT ---
+# --- 5. UI LAYOUT & MODE RESET LOGIC ---
 try: st.sidebar.image("logo.png", width=180)
 except: pass
 
 st.title("Aviation Fuel Pressure Diagnostic Tool")
 
+# Function to clear charts when switching modes
+def reset_app():
+    if "current_charts" in st.session_state:
+        del st.session_state["current_charts"]
+
 with st.sidebar:
     st.header("1. Aircraft Config")
     reg = st.text_input("Registration", value="")
-    engine_type = st.radio("Engine Type", ["Naturally Aspirated", "Turbocharged"])
+    
+    # Trigger reset_app on change
+    engine_type = st.radio(
+        "Engine Type", 
+        ["Naturally Aspirated", "Turbocharged"], 
+        on_change=reset_app
+    )
     
     if engine_type == "Naturally Aspirated":
-        rpm_drop = st.selectbox("RPM Correction Table", list(CORRECTION_MAP.keys()))
+        rpm_drop = st.selectbox("RPM Correction Table", list(CORRECTION_MAP.keys()), on_change=reset_app)
         factor = CORRECTION_MAP[rpm_drop]
     else:
         factor = 1.0 
@@ -93,16 +104,17 @@ with st.sidebar:
 
 is_turbo = (engine_type == "Turbocharged")
 
+# Layout for file uploaders
 if is_turbo:
     c1, c2, c3 = st.columns(3)
-    f_met = c1.file_uploader("Upload Max RPM METERED", type="csv")
-    f_unm = c2.file_uploader("Upload Max RPM UNMETERED", type="csv")
-    f_idl = c3.file_uploader("Upload IDLE RPM", type="csv")
+    f_met = c1.file_uploader("Upload Max RPM METERED", type="csv", key="turbo_met")
+    f_unm = c2.file_uploader("Upload Max RPM UNMETERED", type="csv", key="turbo_unm")
+    f_idl = c3.file_uploader("Upload IDLE RPM", type="csv", key="turbo_idl")
     files = {"MET": f_met, "UNM": f_unm, "IDLE": f_idl}
 else:
     c1, c2 = st.columns(2)
-    f_na_max = c1.file_uploader("Upload Max RPM Data", type="csv")
-    f_na_idl = c2.file_uploader("Upload Idle RPM Data", type="csv")
+    f_na_max = c1.file_uploader("Upload Max RPM Data", type="csv", key="na_max")
+    f_na_idl = c2.file_uploader("Upload Idle RPM Data", type="csv", key="na_idl")
     files = {"NA_MAX": f_na_max, "NA_IDLE": f_na_idl}
 
 # --- 6. ACTION BUTTON ---
@@ -111,7 +123,6 @@ if st.button("Graph Uploaded Data"):
     
     try:
         if is_turbo:
-            # TURBO METERED (Column D)
             if files["MET"]:
                 df = pd.read_csv(files["MET"])
                 t, p = df.iloc[:, 0], df.iloc[:, 3]
@@ -123,7 +134,6 @@ if st.button("Graph Uploaded Data"):
                 apply_style(fig, f"Max RPM Metered Pressure - {reg}")
                 charts.append(("Max RPM Metered", fig))
 
-            # TURBO UNMETERED
             if files["UNM"]:
                 df = pd.read_csv(files["UNM"])
                 t = df.iloc[:, 0]
@@ -138,7 +148,6 @@ if st.button("Graph Uploaded Data"):
                 apply_style(fig, f"Max RPM Unmetered Pressure - {reg}")
                 charts.append(("Max RPM Unmetered", fig))
 
-            # TURBO IDLE (Title Updated)
             if files["IDLE"]:
                 df = pd.read_csv(files["IDLE"])
                 t = df.iloc[:, 0]
@@ -154,7 +163,6 @@ if st.button("Graph Uploaded Data"):
                 charts.append(("Idle RPM Unmetered", fig))
 
         else:
-            # NA MAX
             if files["NA_MAX"]:
                 df = pd.read_csv(files["NA_MAX"])
                 t, u, m = df["Time (s)"], df["UNMETERED [PSI]"], df["METERED [PSI]"]
@@ -174,7 +182,6 @@ if st.button("Graph Uploaded Data"):
                 apply_style(fig, f"NA Max RPM Performance - {reg}")
                 charts.append(("Max RPM Analysis", fig))
 
-            # NA IDLE (Title Updated)
             if files["NA_IDLE"]:
                 df = pd.read_csv(files["NA_IDLE"])
                 t, p = df["Time (s)"], df["UNMETERED [PSI]"]
@@ -194,7 +201,7 @@ if st.button("Graph Uploaded Data"):
             st.warning("No files uploaded to graph.")
             
     except Exception as e:
-        st.error(f"Error processing files: Ensure the correct mode is selected for the data uploaded.")
+        st.error(f"Data mismatch. Check that your CSV headers match the selected {engine_type} mode.")
 
 # --- 7. DISPLAY & PDF ---
 if "current_charts" in st.session_state:
