@@ -73,14 +73,14 @@ def add_peak_marker(fig, x_data, y_data, name, color, is_min=False):
         marker=dict(color=color, size=12, line=dict(width=2, color="white"))
     ))
 
-# --- 5. UI LAYOUT & MODE RESET LOGIC ---
+# --- 5. UI LAYOUT & SELECTIVE RESET LOGIC ---
 try: st.sidebar.image("logo.png", width=180)
 except: pass
 
 st.title("Aviation Fuel Pressure Diagnostic Tool")
 
-# Function to clear charts when switching modes
-def reset_app():
+# Resets charts only on engine type change
+def reset_engine_mode():
     if "current_charts" in st.session_state:
         del st.session_state["current_charts"]
 
@@ -88,15 +88,16 @@ with st.sidebar:
     st.header("1. Aircraft Config")
     reg = st.text_input("Registration", value="")
     
-    # Trigger reset_app on change
+    # reset_engine_mode is ONLY triggered here
     engine_type = st.radio(
         "Engine Type", 
         ["Naturally Aspirated", "Turbocharged"], 
-        on_change=reset_app
+        on_change=reset_engine_mode
     )
     
     if engine_type == "Naturally Aspirated":
-        rpm_drop = st.selectbox("RPM Correction Table", list(CORRECTION_MAP.keys()), on_change=reset_app)
+        # Removed on_change from here so factor changes don't wipe data
+        rpm_drop = st.selectbox("RPM Correction Table", list(CORRECTION_MAP.keys()))
         factor = CORRECTION_MAP[rpm_drop]
     else:
         factor = 1.0 
@@ -104,7 +105,6 @@ with st.sidebar:
 
 is_turbo = (engine_type == "Turbocharged")
 
-# Layout for file uploaders
 if is_turbo:
     c1, c2, c3 = st.columns(3)
     f_met = c1.file_uploader("Upload Max RPM METERED", type="csv", key="turbo_met")
@@ -201,7 +201,7 @@ if st.button("Graph Uploaded Data"):
             st.warning("No files uploaded to graph.")
             
     except Exception as e:
-        st.error(f"Data mismatch. Check that your CSV headers match the selected {engine_type} mode.")
+        st.error(f"Data mismatch. Check that your CSV headers match the selected mode.")
 
 # --- 7. DISPLAY & PDF ---
 if "current_charts" in st.session_state:
