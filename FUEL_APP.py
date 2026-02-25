@@ -11,10 +11,22 @@ st.set_page_config(page_title="SR22(T) Fuel Tool", layout="wide")
 
 st.markdown("""
     <style>
+        /* Hide Streamlit Branding */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        
+        /* Adjust top padding for a cleaner look */
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 0rem;
+        }
+
         .stApp { background-color: white !important; }
         section[data-testid="stSidebar"] { background-color: #f0f2f6 !important; }
         p, h1, h2, h3, label { color: #31333f !important; }
         
+        /* Custom Button Styling */
         div.stButton > button:first-child {
             background-color: #e0e6ed;
             color: #1a1c23;
@@ -101,7 +113,6 @@ with st.sidebar:
 
 is_turbo = (engine_type == "Turbocharged")
 
-# File Uploaders
 if is_turbo:
     c1, c2, c3 = st.columns(3)
     f_met = c1.file_uploader("Upload Max RPM METERED", type="csv", key="turbo_met")
