@@ -7,7 +7,7 @@ from fpdf import FPDF
 import io
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="Fuel Analysis Tool", layout="wide")
+st.set_page_config(page_title="SR22(T) Fuel Tool", layout="wide")
 
 st.markdown("""
     <style>
@@ -77,7 +77,7 @@ def add_peak_marker(fig, x_data, y_data, name, color, is_min=False):
 try: st.sidebar.image("logo.png", width=180)
 except: pass
 
-st.title("Aviation Fuel Pressure Diagnostic Tool")
+st.title("SR22(T) Fuel Pressure Diagnostic Tool")
 
 def reset_engine_mode():
     st.session_state["graph_ready"] = False
@@ -168,13 +168,10 @@ if st.session_state.get("graph_ready"):
                 fig = go.Figure()
                 fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=28, y1=30, fillcolor="#32CD32", opacity=0.3)
                 
-                # Dynamic Metered Range Calculation
                 ml, mh = 19.0 * factor, 21.3 * factor
-                
                 fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=ml, y1=mh, fillcolor="#00BFFF", opacity=0.3)
                 add_label(fig, 29, "UNMETERED (28-30)", "#006400")
                 
-                # Updated Label with Numerical Range
                 metered_label_text = f"METERED ({rpm_drop_label}): {ml:.2f} - {mh:.2f} PSI"
                 add_label(fig, (ml+mh)/2, metered_label_text, "#00008B")
                 
@@ -200,7 +197,6 @@ if st.session_state.get("graph_ready"):
                 apply_style(fig, f"Idle RPM Unmetered - {reg}")
                 current_charts.append(("Idle RPM Unmetered", fig))
 
-        # Render current session charts
         for title, fig in current_charts:
             st.plotly_chart(fig, use_container_width=True)
 
