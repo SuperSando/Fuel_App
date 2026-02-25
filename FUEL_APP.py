@@ -85,7 +85,7 @@ if is_turbo:
 
     if f_met and f_unm and f_idl:
         try:
-            # 1. Max Metered
+            # 1. Max Metered (Strict Column D)
             df1 = pd.read_csv(f_met)
             t1, p1 = df1.iloc[:, 0], df1.iloc[:, 3]
             ps1 = savgol_filter(p1, 9, 3)
@@ -99,10 +99,10 @@ if is_turbo:
             apply_style(fig1, f"Max RPM Metered Pressure - {reg}")
             charts.append(("Max RPM Metered", fig1))
 
-            # 2. Max Unmetered
+            # 2. Max Unmetered (Strict "UNMETERED" Name Check)
             df2 = pd.read_csv(f_unm)
             t2 = df2.iloc[:, 0]
-            unm_col = [c for c in df2.columns if "UNMETERED" in c.upper() or "DIFFERENTIAL" in c.upper()][0]
+            unm_col = [c for c in df2.columns if "UNMETERED" in c.upper()][0]
             p2, ps2 = df2[unm_col], savgol_filter(df2[unm_col], 9, 3)
             fig2 = go.Figure()
             fig2.add_shape(type="rect", x0=t2.iloc[0], x1=t2.iloc[-1], y0=21.0, y1=24.0, fillcolor="#FFD700", opacity=0.3)
@@ -113,7 +113,7 @@ if is_turbo:
             apply_style(fig2, f"Max RPM Unmetered Pressure - {reg}")
             charts.append(("Max RPM Unmetered", fig2))
 
-            # 3. Idle
+            # 3. Idle (Strict Column D)
             df3 = pd.read_csv(f_idl)
             t3, p3 = df3.iloc[:, 0], df3.iloc[:, 3]
             ps3 = savgol_filter(p3, 9, 3)
@@ -125,9 +125,13 @@ if is_turbo:
             add_peak_marker(fig3, t3, ps3, "Min PSI", "#8B0000", is_min=True)
             apply_style(fig3, f"Idle RPM Check - {reg}")
             charts.append(("Idle RPM", fig3))
-        except: st.warning("⚠️ Turbo Data Mismatch.")
+        except IndexError:
+            st.error("⚠️ Column Name Error: Ensure the Max RPM Unmetered file contains a column with 'UNMETERED' in the title.")
+        except Exception:
+            st.warning("⚠️ Data Mismatch: Ensure Column A is Time and Column D is Pressure for Metered/Idle files.")
 
 else:
+    # Naturally Aspirated logic remains untouched
     c1, c2 = st.columns(2)
     f_max, f_idl = c1.file_uploader("Upload Max RPM Data", type="csv"), c2.file_uploader("Upload Idle RPM Data", type="csv")
 
@@ -138,8 +142,10 @@ else:
             us1, ms1 = savgol_filter(u1, 9, 3), savgol_filter(m1, 9, 3)
             fig1 = go.Figure()
             fig1.add_shape(type="rect", x0=t1.iloc[0], x1=t1.iloc[-1], y0=28, y1=30, fillcolor="#32CD32", opacity=0.3)
+            add_label(fig1, 29, "UNMETERED (28-30)", "#006400")
             ml, mh = 19.0*factor, 21.3*factor
             fig1.add_shape(type="rect", x0=t1.iloc[0], x1=t1.iloc[-1], y0=ml, y1=mh, fillcolor="#00BFFF", opacity=0.3)
+            add_label(fig1, (ml+mh)/2, f"METERED ({rpm_drop})", "#00008B")
             fig1.add_trace(go.Scatter(x=t1, y=u1, name="Raw UNM", line=dict(color="red", width=2, dash="dot")))
             fig1.add_trace(go.Scatter(x=t1, y=m1, name="Raw MET", line=dict(color="blue", width=2, dash="dot")))
             fig1.add_trace(go.Scatter(x=t1, y=us1, name="Smooth UNM", line=dict(color="#8B0000", width=3)))
@@ -153,6 +159,7 @@ else:
             ps2 = savgol_filter(p2, 9, 3)
             fig2 = go.Figure()
             fig2.add_shape(type="rect", x0=t2.iloc[0], x1=t2.iloc[-1], y0=8, y1=10, fillcolor="#32CD32", opacity=0.3)
+            add_label(fig2, 9, "NA Idle (8-10)", "#006400")
             fig2.add_trace(go.Scatter(x=t2, y=p2, name="Raw Idle", line=dict(color="red", width=2, dash="dot")))
             fig2.add_trace(go.Scatter(x=t2, y=ps2, name="Smooth Idle", line=dict(color="#8B0000", width=3)))
             add_peak_marker(fig2, t2, ps2, "Min PSI", "#8B0000", is_min=True)
@@ -160,7 +167,7 @@ else:
             charts.append(("Idle RPM", fig2))
         except: st.warning("⚠️ NA Headers Mismatch.")
 
-# --- 6. RENDER ---
+# --- 6. RENDER & PDF ---
 for title, fig in charts: st.plotly_chart(fig, use_container_width=True)
 
 if charts and st.button("Generate Airworthiness Report"):
@@ -170,4 +177,4 @@ if charts and st.button("Generate Airworthiness Report"):
         pdf.add_page(); pdf.set_font("Helvetica", "B", 16)
         pdf.cell(0, 10, f"{title} | {reg}", new_x="LMARGIN", new_y="NEXT")
         pdf.image(io.BytesIO(img), x=10, y=30, w=275)
-    st.download_button("📥 Download PDF", data=bytes(pdf.output()), file_name=f"{reg}_Fuel_Report.pdf")
+    st.download_button("📥 Download PDF Report", data=bytes(pdf.output()), file_name=f"{reg}_Fuel_Report.pdf")
