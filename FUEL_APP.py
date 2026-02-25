@@ -9,14 +9,12 @@ import io
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Fuel Analysis Tool", layout="wide")
 
-# Custom CSS for Light Mode and Button Legibility
 st.markdown("""
     <style>
         .stApp { background-color: white !important; }
         section[data-testid="stSidebar"] { background-color: #f0f2f6 !important; }
         p, h1, h2, h3, label { color: #31333f !important; }
         
-        /* Custom Button Styling: Light Background, Dark Text */
         div.stButton > button:first-child {
             background-color: #e0e6ed;
             color: #1a1c23;
@@ -125,7 +123,7 @@ if st.button("Graph Uploaded Data"):
                 apply_style(fig, f"Max RPM Metered Pressure - {reg}")
                 charts.append(("Max RPM Metered", fig))
 
-            # TURBO UNMETERED (Header Search)
+            # TURBO UNMETERED
             if files["UNM"]:
                 df = pd.read_csv(files["UNM"])
                 t = df.iloc[:, 0]
@@ -140,7 +138,7 @@ if st.button("Graph Uploaded Data"):
                 apply_style(fig, f"Max RPM Unmetered Pressure - {reg}")
                 charts.append(("Max RPM Unmetered", fig))
 
-            # TURBO IDLE (Header Search)
+            # TURBO IDLE (Title Updated)
             if files["IDLE"]:
                 df = pd.read_csv(files["IDLE"])
                 t = df.iloc[:, 0]
@@ -152,8 +150,8 @@ if st.button("Graph Uploaded Data"):
                 fig.add_trace(go.Scatter(x=t, y=p, name="Raw Idle", line=dict(color="red", width=2, dash="dot")))
                 fig.add_trace(go.Scatter(x=t, y=ps, name="Smooth Idle", line=dict(color="#8B0000", width=3)))
                 add_peak_marker(fig, t, ps, "Min PSI", "#8B0000", is_min=True)
-                apply_style(fig, f"Idle RPM Check - {reg}")
-                charts.append(("Idle RPM", fig))
+                apply_style(fig, f"Idle RPM Unmetered - {reg}")
+                charts.append(("Idle RPM Unmetered", fig))
 
         else:
             # NA MAX
@@ -176,7 +174,7 @@ if st.button("Graph Uploaded Data"):
                 apply_style(fig, f"NA Max RPM Performance - {reg}")
                 charts.append(("Max RPM Analysis", fig))
 
-            # NA IDLE
+            # NA IDLE (Title Updated)
             if files["NA_IDLE"]:
                 df = pd.read_csv(files["NA_IDLE"])
                 t, p = df["Time (s)"], df["UNMETERED [PSI]"]
@@ -187,8 +185,8 @@ if st.button("Graph Uploaded Data"):
                 fig.add_trace(go.Scatter(x=t, y=p, name="Raw Idle", line=dict(color="red", width=2, dash="dot")))
                 fig.add_trace(go.Scatter(x=t, y=ps, name="Smooth Idle", line=dict(color="#8B0000", width=3)))
                 add_peak_marker(fig, t, ps, "Min PSI", "#8B0000", is_min=True)
-                apply_style(fig, f"NA Idle Check - {reg}")
-                charts.append(("Idle RPM", fig))
+                apply_style(fig, f"Idle RPM Unmetered - {reg}")
+                charts.append(("Idle RPM Unmetered", fig))
 
         if charts:
             st.session_state["current_charts"] = charts
