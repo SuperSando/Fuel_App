@@ -73,22 +73,19 @@ def add_peak_marker(fig, x_data, y_data, name, color, is_min=False):
         marker=dict(color=color, size=12, line=dict(width=2, color="white"))
     ))
 
-# --- 5. UI LAYOUT & SELECTIVE RESET LOGIC ---
+# --- 5. UI LAYOUT & MODE RESET ---
 try: st.sidebar.image("logo.png", width=180)
 except: pass
 
 st.title("Aviation Fuel Pressure Diagnostic Tool")
 
-# Resets charts only on engine type change
 def reset_engine_mode():
-    if "current_charts" in st.session_state:
-        del st.session_state["current_charts"]
+    st.session_state["graph_ready"] = False
 
 with st.sidebar:
     st.header("1. Aircraft Config")
     reg = st.text_input("Registration", value="")
     
-    # reset_engine_mode is ONLY triggered here
     engine_type = st.radio(
         "Engine Type", 
         ["Naturally Aspirated", "Turbocharged"], 
@@ -96,7 +93,6 @@ with st.sidebar:
     )
     
     if engine_type == "Naturally Aspirated":
-        # Removed on_change from here so factor changes don't wipe data
         rpm_drop = st.selectbox("RPM Correction Table", list(CORRECTION_MAP.keys()))
         factor = CORRECTION_MAP[rpm_drop]
     else:
@@ -105,6 +101,7 @@ with st.sidebar:
 
 is_turbo = (engine_type == "Turbocharged")
 
+# File Uploaders
 if is_turbo:
     c1, c2, c3 = st.columns(3)
     f_met = c1.file_uploader("Upload Max RPM METERED", type="csv", key="turbo_met")
@@ -117,10 +114,12 @@ else:
     f_na_idl = c2.file_uploader("Upload Idle RPM Data", type="csv", key="na_idl")
     files = {"NA_MAX": f_na_max, "NA_IDLE": f_na_idl}
 
-# --- 6. ACTION BUTTON ---
+# --- 6. PROCESSING & DYNAMIC RENDERING ---
 if st.button("Graph Uploaded Data"):
-    charts = []
-    
+    st.session_state["graph_ready"] = True
+
+if st.session_state.get("graph_ready"):
+    current_charts = []
     try:
         if is_turbo:
             if files["MET"]:
@@ -132,7 +131,7 @@ if st.button("Graph Uploaded Data"):
                 fig.add_trace(go.Scatter(x=t, y=ps, name="Smooth MET", line=dict(color="#00008B", width=3)))
                 add_peak_marker(fig, t, ps, "Peak MET", "#00008B")
                 apply_style(fig, f"Max RPM Metered Pressure - {reg}")
-                charts.append(("Max RPM Metered", fig))
+                current_charts.append(("Max RPM Metered", fig))
 
             if files["UNM"]:
                 df = pd.read_csv(files["UNM"])
@@ -146,7 +145,7 @@ if st.button("Graph Uploaded Data"):
                 fig.add_trace(go.Scatter(x=t, y=ps, name="Smooth UNM", line=dict(color="#8B0000", width=3)))
                 add_peak_marker(fig, t, ps, "Peak UNM", "#8B0000")
                 apply_style(fig, f"Max RPM Unmetered Pressure - {reg}")
-                charts.append(("Max RPM Unmetered", fig))
+                current_charts.append(("Max RPM Unmetered", fig))
 
             if files["IDLE"]:
                 df = pd.read_csv(files["IDLE"])
@@ -160,8 +159,7 @@ if st.button("Graph Uploaded Data"):
                 fig.add_trace(go.Scatter(x=t, y=ps, name="Smooth Idle", line=dict(color="#8B0000", width=3)))
                 add_peak_marker(fig, t, ps, "Min PSI", "#8B0000", is_min=True)
                 apply_style(fig, f"Idle RPM Unmetered - {reg}")
-                charts.append(("Idle RPM Unmetered", fig))
-
+                current_charts.append(("Idle RPM Unmetered", fig))
         else:
             if files["NA_MAX"]:
                 df = pd.read_csv(files["NA_MAX"])
@@ -180,7 +178,7 @@ if st.button("Graph Uploaded Data"):
                 add_peak_marker(fig, t, us, "Peak UNM", "#8B0000")
                 add_peak_marker(fig, t, ms, "Peak MET", "#00008B")
                 apply_style(fig, f"NA Max RPM Performance - {reg}")
-                charts.append(("Max RPM Analysis", fig))
+                current_charts.append(("Max RPM Analysis", fig))
 
             if files["NA_IDLE"]:
                 df = pd.read_csv(files["NA_IDLE"])
@@ -193,26 +191,20 @@ if st.button("Graph Uploaded Data"):
                 fig.add_trace(go.Scatter(x=t, y=ps, name="Smooth Idle", line=dict(color="#8B0000", width=3)))
                 add_peak_marker(fig, t, ps, "Min PSI", "#8B0000", is_min=True)
                 apply_style(fig, f"Idle RPM Unmetered - {reg}")
-                charts.append(("Idle RPM Unmetered", fig))
+                current_charts.append(("Idle RPM Unmetered", fig))
 
-        if charts:
-            st.session_state["current_charts"] = charts
-        else:
-            st.warning("No files uploaded to graph.")
-            
+        # Render current session charts
+        for title, fig in current_charts:
+            st.plotly_chart(fig, use_container_width=True)
+
+        if current_charts and st.button("Generate Report from Current Graphs"):
+            pdf = FPDF(orientation='L', unit='mm', format='A4')
+            for title, fig in current_charts:
+                img = fig.to_image(format="png", width=1200, height=700, scale=2)
+                pdf.add_page(); pdf.set_font("Helvetica", "B", 16)
+                pdf.cell(0, 10, f"{title} | {reg}", new_x="LMARGIN", new_y="NEXT")
+                pdf.image(io.BytesIO(img), x=10, y=30, w=275)
+            st.download_button("📥 Download PDF", data=bytes(pdf.output()), file_name=f"{reg}_Fuel_Report.pdf")
+
     except Exception as e:
-        st.error(f"Data mismatch. Check that your CSV headers match the selected mode.")
-
-# --- 7. DISPLAY & PDF ---
-if "current_charts" in st.session_state:
-    for title, fig in st.session_state["current_charts"]:
-        st.plotly_chart(fig, use_container_width=True)
-
-    if st.button("Generate Report from Current Graphs"):
-        pdf = FPDF(orientation='L', unit='mm', format='A4')
-        for title, fig in st.session_state["current_charts"]:
-            img = fig.to_image(format="png", width=1200, height=700, scale=2)
-            pdf.add_page(); pdf.set_font("Helvetica", "B", 16)
-            pdf.cell(0, 10, f"{title} | {reg}", new_x="LMARGIN", new_y="NEXT")
-            pdf.image(io.BytesIO(img), x=10, y=30, w=275)
-        st.download_button("📥 Download PDF", data=bytes(pdf.output()), file_name=f"{reg}_Fuel_Report.pdf")
+        st.error(f"Please ensure correct mode is selected for uploaded data.")
