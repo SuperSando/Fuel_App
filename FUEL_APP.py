@@ -64,46 +64,46 @@ def add_high_vis_label(fig, y_val, label_text, label_color, x_pos=0.01):
 
 # --- 5. CHARTING ENGINE ---
 def generate_charts(df_max, df_idle, is_turbo, reg, factor_label, factor):
-    # Max RPM Plot
+    # --- Max RPM Plot ---
     f_max = go.Figure()
-    t_m = df_max["Time (s)"]
     
-    # Metered Band Logic (Always present, corrected by RPM)
+    # Target Column A (Time) and Column D (Fuel Pressure) by index
+    # We rename them internally here for the charting logic
+    t_m = df_max.iloc[:, 0]  # Column A
+    p_m = df_max.iloc[:, 3]  # Column D (index 3)
+    
+    # Smooth the data
+    p_sm = savgol_filter(p_m, 9, 3)
+    
+    # Add Metered Band (Always present)
     met_low, met_high = 19.0 * factor, 21.3 * factor
     f_max.add_shape(type="rect", x0=t_m.iloc[0], x1=t_m.iloc[-1], y0=met_low, y1=met_high, fillcolor="#00BFFF", opacity=0.3, layer="below", line_width=1, line_color="#00008B")
     add_high_vis_label(f_max, (met_low+met_high)/2, f"METERED ({factor_label})", "#00008B")
 
-    # Trace Mapping
-    met_sm = savgol_filter(df_max["METERED [PSI]"], 9, 3)
-    f_max.add_trace(go.Scatter(x=t_m, y=df_max["METERED [PSI]"], name="Raw Metered", line=dict(color="blue", width=2, dash="dot"), hoverinfo="none"))
-    f_max.add_trace(go.Scatter(x=t_m, y=met_sm, name="<b>Smooth Metered</b>", line=dict(color="#00008B", width=3)))
+    # Trace Mapping - Main Fuel Pressure Trace
+    f_max.add_trace(go.Scatter(x=t_m, y=p_m, name="Raw FUEL PRESSURE", line=dict(color="blue", width=2, dash="dot"), hoverinfo="none"))
+    f_max.add_trace(go.Scatter(x=t_m, y=p_sm, name="<b>Smooth FUEL PRESSURE</b>", line=dict(color="#00008B", width=3)))
 
     if is_turbo:
-        # Turbo Specific Logic
-        unm_sm = savgol_filter(df_max["DIFFERENTIAL [PSI]"], 9, 3) # Mapping to the extra Turbo column
+        # Turbo Unmetered Band (Yellow)
         f_max.add_shape(type="rect", x0=t_m.iloc[0], x1=t_m.iloc[-1], y0=21.0, y1=24.0, fillcolor="#FFD700", opacity=0.3, layer="below", line_width=0)
         add_high_vis_label(f_max, 22.5, "Turbo UNMETERED (21-24)", "#8B4513")
-        f_max.add_trace(go.Scatter(x=t_m, y=df_max["DIFFERENTIAL [PSI]"], name="Raw Diff", line=dict(color="red", width=2, dash="dot"), hoverinfo="none"))
-        f_max.add_trace(go.Scatter(x=t_m, y=unm_sm, name="<b>Smooth Diff</b>", line=dict(color="#8B0000", width=3)))
     else:
-        # Non-Turbo Logic
-        unm_sm = savgol_filter(df_max["UNMETERED [PSI]"], 9, 3)
+        # Non-Turbo Unmetered Band (Green)
         f_max.add_shape(type="rect", x0=t_m.iloc[0], x1=t_m.iloc[-1], y0=28.0, y1=30.0, fillcolor="#32CD32", opacity=0.3, layer="below", line_width=0)
         add_high_vis_label(f_max, 29.0, "Non-Turbo UNMETERED (28-30)", "#006400")
-        f_max.add_trace(go.Scatter(x=t_m, y=df_max["UNMETERED [PSI]"], name="Raw Unmetered", line=dict(color="red", width=2, dash="dot"), hoverinfo="none"))
-        f_max.add_trace(go.Scatter(x=t_m, y=unm_sm, name="<b>Smooth Unmetered</b>", line=dict(color="#8B0000", width=3)))
 
-    # Peak Markers
-    m_pt = met_sm.argmax()
-    f_max.add_trace(go.Scatter(x=[t_m.iloc[m_pt]], y=[met_sm[m_pt]], mode="markers+text", name="Peak MET", text=[f"<b>{met_sm[m_pt]:.2f}</b>"], textposition="top center", marker=dict(color="#00008B", size=12, line=dict(width=2, color="white"))))
+    # Peak Marker for Max RPM
+    m_pt = p_sm.argmax()
+    f_max.add_trace(go.Scatter(x=[t_m.iloc[m_pt]], y=[p_sm[m_pt]], mode="markers+text", name="Peak PSI", text=[f"<b>{p_sm[m_pt]:.2f}</b>"], textposition="top center", marker=dict(color="#00008B", size=12, line=dict(width=2, color="white"))))
     
-    apply_high_contrast_style(f_max, f"Max RPM Performance - {reg}")
+    apply_high_contrast_style(f_max, f"Max RPM Analysis - {reg}")
 
-    # Idle RPM Plot
+    # --- Idle RPM Plot ---
     f_idle = go.Figure()
-    t_i = df_idle["Time (s)"]
-    unm_i = df_idle["UNMETERED [PSI]"]
-    unm_si = savgol_filter(unm_i, 9, 3)
+    t_i = df_idle.iloc[:, 0] # Column A
+    p_i = df_idle.iloc[:, 3] # Column D
+    p_si = savgol_filter(p_i, 9, 3)
     
     if is_turbo:
         f_idle.add_shape(type="rect", x0=t_i.iloc[0], x1=t_i.iloc[-1], y0=7.0, y1=9.0, fillcolor="#FFD700", opacity=0.3, layer="below")
@@ -112,8 +112,13 @@ def generate_charts(df_max, df_idle, is_turbo, reg, factor_label, factor):
         f_idle.add_shape(type="rect", x0=t_i.iloc[0], x1=t_i.iloc[-1], y0=8.0, y1=10.0, fillcolor="#32CD32", opacity=0.3, layer="below")
         add_high_vis_label(f_idle, 9.0, "Non-Turbo Idle (8-10)", "#006400")
 
-    f_idle.add_trace(go.Scatter(x=t_i, y=unm_i, name="Raw Unmetered", line=dict(color="red", width=2, dash="dot")))
-    f_idle.add_trace(go.Scatter(x=t_i, y=unm_si, name="<b>Smooth Unmetered</b>", line=dict(color="#8B0000", width=3)))
+    f_idle.add_trace(go.Scatter(x=t_i, y=p_i, name="Raw FUEL PRESSURE", line=dict(color="red", width=2, dash="dot")))
+    f_idle.add_trace(go.Scatter(x=t_i, y=p_si, name="<b>Smooth FUEL PRESSURE</b>", line=dict(color="#8B0000", width=3)))
+    
+    # Peak Marker for Idle
+    i_pt = p_si.argmin()
+    f_idle.add_trace(go.Scatter(x=[t_i.iloc[i_pt]], y=[p_si[i_pt]], mode="markers+text", name="Min PSI", text=[f"<b>{p_si[i_pt]:.2f}</b>"], textposition="top center", marker=dict(color="#8B0000", size=12, line=dict(width=2, color="white"))))
+
     apply_high_contrast_style(f_idle, f"Idle RPM Check - {reg}")
 
     return f_max, f_idle
@@ -127,25 +132,23 @@ st.title("Aviation Fuel Pressure Diagnostic Tool")
 with st.sidebar:
     st.header("1. Aircraft Config")
     reg = st.text_input("Registration", value="")
-    engine_type = st.radio("Engine Type", ["Non-Turbo (Naturally Aspirated)", "Turbocharged"])
+    engine_type = st.radio("Engine Type", ["Naturally Aspirated", "Turbocharged"])
     rpm_drop = st.selectbox("RPM Correction Table", list(CORRECTION_MAP.keys()))
-    st.info("System will auto-detect columns based on engine selection.")
+    st.info("System targeted: Column A (Time) & Column D (Fuel Pressure).")
 
 c1, c2 = st.columns(2)
 m_file = c1.file_uploader("Upload Max RPM CSV", type="csv")
 i_file = c2.file_uploader("Upload Idle RPM CSV", type="csv")
 
 if m_file and i_file:
+    # Load data without worrying about specific header names
     df_m = pd.read_csv(m_file)
     df_i = pd.read_csv(i_file)
     is_turbo = (engine_type == "Turbocharged")
     
-    # Validation Check
-    req_cols = ["Time (s)", "METERED [PSI]"]
-    req_cols.append("DIFFERENTIAL [PSI]" if is_turbo else "UNMETERED [PSI]")
-    
-    if not all(c in df_m.columns for c in req_cols):
-        st.error(f"Missing Columns for {engine_type} mode. Required: {req_cols}")
+    # Basic Validation: Check if we have at least 4 columns
+    if len(df_m.columns) < 4 or len(df_i.columns) < 4:
+        st.error("Uploaded CSV must have at least 4 columns (Time in A, Pressure in D).")
     else:
         f_max, f_idle = generate_charts(df_m, df_i, is_turbo, reg, rpm_drop, CORRECTION_MAP[rpm_drop])
         
