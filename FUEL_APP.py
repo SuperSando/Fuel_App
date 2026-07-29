@@ -7,22 +7,15 @@ from fpdf import FPDF
 import io
 
 # --- 1. CONFIGURATION ---
-st.set_page_config(page_title="SR22(T) Fuel Tool", layout="wide", initial_sidebar_state="expanded")
-
-# Initialize Session States safely at the top
-if "graph_ready" not in st.session_state:
-    st.session_state["graph_ready"] = False
+st.set_page_config(page_title="SR22(T) Fuel Tool", layout="wide")
 
 st.markdown("""
     <style>
-        /* Hide Streamlit Main Menu & Footer safely */
+        /* Hide Streamlit Branding */
         #MainMenu {visibility: hidden;}
         footer {visibility: hidden;}
+        header {visibility: hidden;}
         
-        /* Modifying header slightly instead of hiding completely to prevent breaking the sidebar toggle button */
-        header { background-color: transparent !important; }
-        
-        /* Adjust top padding for a cleaner look */
         .block-container {
             padding-top: 2rem;
             padding-bottom: 0rem;
@@ -52,8 +45,7 @@ def password_entered():
     if st.session_state["password"] == st.secrets["password"]:
         st.session_state["password_correct"] = True
         del st.session_state["password"] 
-    else: 
-        st.session_state["password_correct"] = False
+    else: st.session_state["password_correct"] = False
 
 if "password_correct" not in st.session_state or not st.session_state["password_correct"]:
     try: st.image("logo.png", width=200)
@@ -92,6 +84,16 @@ def add_peak_marker(fig, x_data, y_data, name, color, is_min=False):
         marker=dict(color=color, size=12, line=dict(width=2, color="white"))
     ))
 
+def get_col(df, search_term, fallback_idx=None):
+    """Resilient Column Finder by keyword or fallback index"""
+    df.columns = df.columns.astype(str).str.strip()
+    matches = [c for c in df.columns if search_term.upper() in c.upper()]
+    if matches:
+        return matches[0]
+    if fallback_idx is not None and len(df.columns) > fallback_idx:
+        return df.columns[fallback_idx]
+    raise KeyError(f"Could not find column matching '{search_term}'")
+
 # --- 5. UI LAYOUT & MODE RESET ---
 try: st.sidebar.image("logo.png", width=180)
 except: pass
@@ -120,6 +122,7 @@ with st.sidebar:
 
 is_turbo = (engine_type == "Turbocharged")
 
+# File Uploaders
 if is_turbo:
     c1, c2, c3 = st.columns(3)
     f_met = c1.file_uploader("Upload Max RPM METERED", type="csv", key="turbo_met")
@@ -136,13 +139,15 @@ else:
 if st.button("Graph Uploaded Data"):
     st.session_state["graph_ready"] = True
 
-if st.session_state["graph_ready"]:
+if st.session_state.get("graph_ready"):
     current_charts = []
     try:
         if is_turbo:
             if files["MET"]:
                 df = pd.read_csv(files["MET"])
-                t, p = df.iloc[:, 0], df.iloc[:, 3]
+                time_col = get_col(df, "TIME", 0)
+                met_col = get_col(df, "METERED", 3)
+                t, p = df[time_col], df[met_col]
                 ps = savgol_filter(p, 9, 3)
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=t, y=p, name="Raw MET", line=dict(color="blue", width=2, dash="dot")))
@@ -153,9 +158,10 @@ if st.session_state["graph_ready"]:
 
             if files["UNM"]:
                 df = pd.read_csv(files["UNM"])
-                t = df.iloc[:, 0]
-                unm_col = [c for c in df.columns if "UNMETERED" in c.upper()][0]
-                p, ps = df[unm_col], savgol_filter(df[unm_col], 9, 3)
+                time_col = get_col(df, "TIME", 0)
+                unm_col = get_col(df, "UNMETERED", 3)
+                t, p = df[time_col], df[unm_col]
+                ps = savgol_filter(p, 9, 3)
                 fig = go.Figure()
                 fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=21, y1=24, fillcolor="#FFD700", opacity=0.3)
                 add_label(fig, 22.5, "Turbo UNMETERED (21-24)", "#8B4513")
@@ -167,9 +173,10 @@ if st.session_state["graph_ready"]:
 
             if files["IDLE"]:
                 df = pd.read_csv(files["IDLE"])
-                t = df.iloc[:, 0]
-                unm_col = [c for c in df.columns if "UNMETERED" in c.upper()][0]
-                p, ps = df[unm_col], savgol_filter(df[unm_col], 9, 3)
+                time_col = get_col(df, "TIME", 0)
+                unm_col = get_col(df, "UNMETERED", 3)
+                t, p = df[time_col], df[unm_col]
+                ps = savgol_filter(p, 9, 3)
                 fig = go.Figure()
                 fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=7, y1=9, fillcolor="#FFD700", opacity=0.3)
                 add_label(fig, 8, "Turbo Idle (7-9)", "#8B4513")
@@ -181,7 +188,11 @@ if st.session_state["graph_ready"]:
         else:
             if files["NA_MAX"]:
                 df = pd.read_csv(files["NA_MAX"])
-                t, u, m = df["Time (s)"], df["UNMETERED [PSI]"], df["METERED [PSI]"]
+                time_col = get_col(df, "TIME", 0)
+                unm_col = get_col(df, "UNMETERED", 1)
+                met_col = get_col(df, "METERED", 2)
+                
+                t, u, m = df[time_col], df[unm_col], df[met_col]
                 us, ms = savgol_filter(u, 9, 3), savgol_filter(m, 9, 3)
                 fig = go.Figure()
                 fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=28, y1=30, fillcolor="#32CD32", opacity=0.3)
@@ -204,7 +215,9 @@ if st.session_state["graph_ready"]:
 
             if files["NA_IDLE"]:
                 df = pd.read_csv(files["NA_IDLE"])
-                t, p = df["Time (s)"], df["UNMETERED [PSI]"]
+                time_col = get_col(df, "TIME", 0)
+                unm_col = get_col(df, "UNMETERED", 1)
+                t, p = df[time_col], df[unm_col]
                 ps = savgol_filter(p, 9, 3)
                 fig = go.Figure()
                 fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=8, y1=10, fillcolor="#32CD32", opacity=0.3)
@@ -215,30 +228,19 @@ if st.session_state["graph_ready"]:
                 apply_style(fig, f"Idle RPM Unmetered - {reg}")
                 current_charts.append(("Idle RPM Unmetered", fig))
 
-        # Render charts visually
         for title, fig in current_charts:
             st.plotly_chart(fig, use_container_width=True)
 
-        # PDF Export Logic - Kept separate from nested execution blocks
-        if current_charts:
-            st.write("---")
-            st.subheader("📊 Report Generation")
-            
-            # Use Streamlit's native button logic combined with an in-memory compiler
+        if current_charts and st.button("Generate Report from Current Graphs"):
             pdf = FPDF(orientation='L', unit='mm', format='A4')
             for title, fig in current_charts:
                 img = fig.to_image(format="png", width=1200, height=700, scale=2)
-                pdf.add_page()
-                pdf.set_font("Helvetica", "B", 16)
+                pdf.add_page(); pdf.set_font("Helvetica", "B", 16)
                 pdf.cell(0, 10, f"{title} | {reg}", new_x="LMARGIN", new_y="NEXT")
                 pdf.image(io.BytesIO(img), x=10, y=30, w=275)
-            
-            st.download_button(
-                label="📥 Download PDF Report", 
-                data=bytes(pdf.output()), 
-                file_name=f"{reg or 'Aircraft'}_Fuel_Report.pdf",
-                mime="application/pdf"
-            )
+            st.download_button("📥 Download PDF", data=bytes(pdf.output()), file_name=f"{reg}_Fuel_Report.pdf")
 
+    except KeyError as e:
+        st.error(f"⚠️ Header Missing: {e}. Please ensure the uploaded CSV contains columns matching Time, Metered, or Unmetered.")
     except Exception as e:
-        st.error(f"Error handling or processing file details. Ensure correct mode matches data: {e}")
+        st.error(f"⚠️ Data Error: {e}")
