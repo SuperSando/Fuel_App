@@ -84,11 +84,19 @@ def add_peak_marker(fig, x_data, y_data, name, color, is_min=False):
         marker=dict(color=color, size=12, line=dict(width=2, color="white"))
     ))
 
-def find_column_by_keyword(df, keyword):
-    """Strict search for a keyword in column titles without index fallback."""
+def resolve_columns(df):
+    """Accurately separates UNMETERED and METERED columns without substring collisions."""
     df.columns = df.columns.astype(str).str.strip()
-    matches = [c for c in df.columns if keyword.upper() in c.upper()]
-    return matches[0] if matches else None
+    unm_col, met_col = None, None
+    
+    for c in df.columns:
+        c_upper = c.upper()
+        if "UNMETERED" in c_upper:
+            unm_col = c
+        elif "METERED" in c_upper:
+            met_col = c
+            
+    return unm_col, met_col
 
 # --- 5. UI LAYOUT & MODE RESET ---
 try: st.sidebar.image("logo.png", width=180)
@@ -154,9 +162,9 @@ if st.session_state.get("graph_ready"):
             if files["UNM"]:
                 df = pd.read_csv(files["UNM"])
                 t = df.iloc[:, 0]
-                unm_col = find_column_by_keyword(df, "UNMETERED")
+                unm_col, _ = resolve_columns(df)
                 if not unm_col:
-                    raise KeyError("Could not find a column header containing 'UNMETERED' in the uploaded file.")
+                    raise KeyError("Could not find an 'UNMETERED' column header in the uploaded file.")
                 p = df[unm_col]
                 ps = savgol_filter(p, 9, 3)
                 fig = go.Figure()
@@ -171,9 +179,9 @@ if st.session_state.get("graph_ready"):
             if files["IDLE"]:
                 df = pd.read_csv(files["IDLE"])
                 t = df.iloc[:, 0]
-                unm_col = find_column_by_keyword(df, "UNMETERED")
+                unm_col, _ = resolve_columns(df)
                 if not unm_col:
-                    raise KeyError("Could not find a column header containing 'UNMETERED' in the uploaded file.")
+                    raise KeyError("Could not find an 'UNMETERED' column header in the uploaded file.")
                 p = df[unm_col]
                 ps = savgol_filter(p, 9, 3)
                 fig = go.Figure()
@@ -190,8 +198,7 @@ if st.session_state.get("graph_ready"):
                 df = pd.read_csv(files["NA_MAX"])
                 t = df.iloc[:, 0]
                 
-                unm_col = find_column_by_keyword(df, "UNMETERED")
-                met_col = find_column_by_keyword(df, "METERED")
+                unm_col, met_col = resolve_columns(df)
 
                 fig = go.Figure()
                 
@@ -205,7 +212,7 @@ if st.session_state.get("graph_ready"):
                 metered_label_text = f"METERED ({rpm_drop_label}): {ml:.2f} - {mh:.2f} PSI"
                 add_label(fig, (ml+mh)/2, metered_label_text, "#00008B")
 
-                # Plot UNMETERED trace if column present
+                # Plot UNMETERED trace
                 if unm_col:
                     u = df[unm_col]
                     us = savgol_filter(u, 9, 3)
@@ -213,7 +220,7 @@ if st.session_state.get("graph_ready"):
                     fig.add_trace(go.Scatter(x=t, y=us, name="Smooth UNM", line=dict(color="#8B0000", width=3)))
                     add_peak_marker(fig, t, us, "Peak UNM", "#8B0000")
 
-                # Plot METERED trace only if column explicitly present
+                # Plot METERED trace
                 if met_col:
                     m = df[met_col]
                     ms = savgol_filter(m, 9, 3)
@@ -222,7 +229,7 @@ if st.session_state.get("graph_ready"):
                     add_peak_marker(fig, t, ms, "Peak MET", "#00008B")
 
                 if not unm_col and not met_col:
-                    raise KeyError("CSV must contain at least an 'UNMETERED' or 'METERED' header.")
+                    raise KeyError("CSV must contain at least an 'UNMETERED' or 'METERED' column header.")
 
                 apply_style(fig, f"NA Max RPM Performance - {reg}")
                 current_charts.append(("Max RPM Analysis", fig))
@@ -230,9 +237,9 @@ if st.session_state.get("graph_ready"):
             if files["NA_IDLE"]:
                 df = pd.read_csv(files["NA_IDLE"])
                 t = df.iloc[:, 0]
-                unm_col = find_column_by_keyword(df, "UNMETERED")
+                unm_col, _ = resolve_columns(df)
                 if not unm_col:
-                    unm_col = df.columns[1]  # Fallback to column 2 if header missing
+                    unm_col = df.columns[1]  # Fallback to column B if missing
                 p = df[unm_col]
                 ps = savgol_filter(p, 9, 3)
                 fig = go.Figure()
