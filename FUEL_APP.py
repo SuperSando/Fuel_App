@@ -84,15 +84,11 @@ def add_peak_marker(fig, x_data, y_data, name, color, is_min=False):
         marker=dict(color=color, size=12, line=dict(width=2, color="white"))
     ))
 
-def get_col(df, search_term, fallback_idx=None):
-    """Resilient Column Finder by keyword or fallback index"""
+def find_column_by_keyword(df, keyword):
+    """Strict search for a keyword in column titles without index fallback."""
     df.columns = df.columns.astype(str).str.strip()
-    matches = [c for c in df.columns if search_term.upper() in c.upper()]
-    if matches:
-        return matches[0]
-    if fallback_idx is not None and len(df.columns) > fallback_idx:
-        return df.columns[fallback_idx]
-    raise KeyError(f"Could not find column matching '{search_term}'")
+    matches = [c for c in df.columns if keyword.upper() in c.upper()]
+    return matches[0] if matches else None
 
 # --- 5. UI LAYOUT & MODE RESET ---
 try: st.sidebar.image("logo.png", width=180)
@@ -145,9 +141,8 @@ if st.session_state.get("graph_ready"):
         if is_turbo:
             if files["MET"]:
                 df = pd.read_csv(files["MET"])
-                time_col = get_col(df, "TIME", 0)
-                met_col = get_col(df, "METERED", 3)
-                t, p = df[time_col], df[met_col]
+                t = df.iloc[:, 0]
+                p = df.iloc[:, 3]  # Strict Column D for Turbo Metered
                 ps = savgol_filter(p, 9, 3)
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=t, y=p, name="Raw MET", line=dict(color="blue", width=2, dash="dot")))
@@ -158,9 +153,11 @@ if st.session_state.get("graph_ready"):
 
             if files["UNM"]:
                 df = pd.read_csv(files["UNM"])
-                time_col = get_col(df, "TIME", 0)
-                unm_col = get_col(df, "UNMETERED", 3)
-                t, p = df[time_col], df[unm_col]
+                t = df.iloc[:, 0]
+                unm_col = find_column_by_keyword(df, "UNMETERED")
+                if not unm_col:
+                    raise KeyError("Could not find a column header containing 'UNMETERED' in the uploaded file.")
+                p = df[unm_col]
                 ps = savgol_filter(p, 9, 3)
                 fig = go.Figure()
                 fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=21, y1=24, fillcolor="#FFD700", opacity=0.3)
@@ -173,9 +170,11 @@ if st.session_state.get("graph_ready"):
 
             if files["IDLE"]:
                 df = pd.read_csv(files["IDLE"])
-                time_col = get_col(df, "TIME", 0)
-                unm_col = get_col(df, "UNMETERED", 3)
-                t, p = df[time_col], df[unm_col]
+                t = df.iloc[:, 0]
+                unm_col = find_column_by_keyword(df, "UNMETERED")
+                if not unm_col:
+                    raise KeyError("Could not find a column header containing 'UNMETERED' in the uploaded file.")
+                p = df[unm_col]
                 ps = savgol_filter(p, 9, 3)
                 fig = go.Figure()
                 fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=7, y1=9, fillcolor="#FFD700", opacity=0.3)
@@ -185,39 +184,56 @@ if st.session_state.get("graph_ready"):
                 add_peak_marker(fig, t, ps, "Min PSI", "#8B0000", is_min=True)
                 apply_style(fig, f"Idle RPM Unmetered - {reg}")
                 current_charts.append(("Idle RPM Unmetered", fig))
+
         else:
             if files["NA_MAX"]:
                 df = pd.read_csv(files["NA_MAX"])
-                time_col = get_col(df, "TIME", 0)
-                unm_col = get_col(df, "UNMETERED", 1)
-                met_col = get_col(df, "METERED", 2)
+                t = df.iloc[:, 0]
                 
-                t, u, m = df[time_col], df[unm_col], df[met_col]
-                us, ms = savgol_filter(u, 9, 3), savgol_filter(m, 9, 3)
+                unm_col = find_column_by_keyword(df, "UNMETERED")
+                met_col = find_column_by_keyword(df, "METERED")
+
                 fig = go.Figure()
-                fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=28, y1=30, fillcolor="#32CD32", opacity=0.3)
                 
+                # Unmetered Banding
+                fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=28, y1=30, fillcolor="#32CD32", opacity=0.3)
+                add_label(fig, 29, "UNMETERED (28-30)", "#006400")
+
+                # Metered Banding
                 ml, mh = 19.0 * factor, 21.3 * factor
                 fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=ml, y1=mh, fillcolor="#00BFFF", opacity=0.3)
-                add_label(fig, 29, "UNMETERED (28-30)", "#006400")
-                
                 metered_label_text = f"METERED ({rpm_drop_label}): {ml:.2f} - {mh:.2f} PSI"
                 add_label(fig, (ml+mh)/2, metered_label_text, "#00008B")
-                
-                fig.add_trace(go.Scatter(x=t, y=u, name="Raw UNM", line=dict(color="red", width=2, dash="dot")))
-                fig.add_trace(go.Scatter(x=t, y=m, name="Raw MET", line=dict(color="blue", width=2, dash="dot")))
-                fig.add_trace(go.Scatter(x=t, y=us, name="Smooth UNM", line=dict(color="#8B0000", width=3)))
-                fig.add_trace(go.Scatter(x=t, y=ms, name="Smooth MET", line=dict(color="#00008B", width=3)))
-                add_peak_marker(fig, t, us, "Peak UNM", "#8B0000")
-                add_peak_marker(fig, t, ms, "Peak MET", "#00008B")
+
+                # Plot UNMETERED trace if column present
+                if unm_col:
+                    u = df[unm_col]
+                    us = savgol_filter(u, 9, 3)
+                    fig.add_trace(go.Scatter(x=t, y=u, name="Raw UNM", line=dict(color="red", width=2, dash="dot")))
+                    fig.add_trace(go.Scatter(x=t, y=us, name="Smooth UNM", line=dict(color="#8B0000", width=3)))
+                    add_peak_marker(fig, t, us, "Peak UNM", "#8B0000")
+
+                # Plot METERED trace only if column explicitly present
+                if met_col:
+                    m = df[met_col]
+                    ms = savgol_filter(m, 9, 3)
+                    fig.add_trace(go.Scatter(x=t, y=m, name="Raw MET", line=dict(color="blue", width=2, dash="dot")))
+                    fig.add_trace(go.Scatter(x=t, y=ms, name="Smooth MET", line=dict(color="#00008B", width=3)))
+                    add_peak_marker(fig, t, ms, "Peak MET", "#00008B")
+
+                if not unm_col and not met_col:
+                    raise KeyError("CSV must contain at least an 'UNMETERED' or 'METERED' header.")
+
                 apply_style(fig, f"NA Max RPM Performance - {reg}")
                 current_charts.append(("Max RPM Analysis", fig))
 
             if files["NA_IDLE"]:
                 df = pd.read_csv(files["NA_IDLE"])
-                time_col = get_col(df, "TIME", 0)
-                unm_col = get_col(df, "UNMETERED", 1)
-                t, p = df[time_col], df[unm_col]
+                t = df.iloc[:, 0]
+                unm_col = find_column_by_keyword(df, "UNMETERED")
+                if not unm_col:
+                    unm_col = df.columns[1]  # Fallback to column 2 if header missing
+                p = df[unm_col]
                 ps = savgol_filter(p, 9, 3)
                 fig = go.Figure()
                 fig.add_shape(type="rect", x0=t.iloc[0], x1=t.iloc[-1], y0=8, y1=10, fillcolor="#32CD32", opacity=0.3)
@@ -241,6 +257,6 @@ if st.session_state.get("graph_ready"):
             st.download_button("📥 Download PDF", data=bytes(pdf.output()), file_name=f"{reg}_Fuel_Report.pdf")
 
     except KeyError as e:
-        st.error(f"⚠️ Header Missing: {e}. Please ensure the uploaded CSV contains columns matching Time, Metered, or Unmetered.")
+        st.error(f"⚠️ Header Error: {e}")
     except Exception as e:
         st.error(f"⚠️ Data Error: {e}")
