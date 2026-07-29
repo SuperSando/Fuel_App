@@ -145,6 +145,7 @@ if st.session_state.get("graph_ready"):
     current_charts = []
     try:
         if is_turbo:
+            # Turbo Metered
             if files["MET"]:
                 df = pd.read_csv(files["MET"])
                 t = df.iloc[:, 0]
@@ -154,11 +155,12 @@ if st.session_state.get("graph_ready"):
                 if show_raw:
                     fig.add_trace(go.Scatter(x=t, y=p, name="Raw MET", line=dict(color="blue", width=2, dash="dot")))
                 if show_smooth:
-                    fig.add_trace(go.Scatter(x=t, y=ps, name="Smooth MET", line=dict(color="#00008B", width=3)))
+                    fig.add_trace(go.Scatter(x=t, y=ps, name="Metered", line=dict(color="#00008B", width=3)))
                     add_peak_marker(fig, t, ps, "Peak MET", "#00008B")
                 apply_style(fig, f"Max RPM Metered Pressure - {reg}")
                 current_charts.append(("Max RPM Metered", fig))
 
+            # Turbo Unmetered
             if files["UNM"]:
                 df = pd.read_csv(files["UNM"])
                 t = df.iloc[:, 0]
@@ -172,11 +174,12 @@ if st.session_state.get("graph_ready"):
                 if show_raw:
                     fig.add_trace(go.Scatter(x=t, y=p, name="Raw UNM", line=dict(color="red", width=2, dash="dot")))
                 if show_smooth:
-                    fig.add_trace(go.Scatter(x=t, y=ps, name="Smooth UNM", line=dict(color="#8B0000", width=3)))
+                    fig.add_trace(go.Scatter(x=t, y=ps, name="Unmetered", line=dict(color="#8B0000", width=3)))
                     add_peak_marker(fig, t, ps, "Peak UNM", "#8B0000")
                 apply_style(fig, f"Max RPM Unmetered Pressure - {reg}")
                 current_charts.append(("Max RPM Unmetered", fig))
 
+            # Turbo Idle
             if files["IDLE"]:
                 df = pd.read_csv(files["IDLE"])
                 t = df.iloc[:, 0]
@@ -190,12 +193,13 @@ if st.session_state.get("graph_ready"):
                 if show_raw:
                     fig.add_trace(go.Scatter(x=t, y=p, name="Raw Idle", line=dict(color="red", width=2, dash="dot")))
                 if show_smooth:
-                    fig.add_trace(go.Scatter(x=t, y=ps, name="Smooth Idle", line=dict(color="#8B0000", width=3)))
+                    fig.add_trace(go.Scatter(x=t, y=ps, name="Idle", line=dict(color="#8B0000", width=3)))
                     add_peak_marker(fig, t, ps, "Min PSI", "#8B0000", is_min=True)
                 apply_style(fig, f"Idle RPM Unmetered - {reg}")
                 current_charts.append(("Idle RPM Unmetered", fig))
 
         else:
+            # NA Max
             if files["NA_MAX"]:
                 df = pd.read_csv(files["NA_MAX"])
                 t = df.iloc[:, 0]
@@ -214,7 +218,7 @@ if st.session_state.get("graph_ready"):
                     if show_raw:
                         fig.add_trace(go.Scatter(x=t, y=u, name="Raw UNM", line=dict(color="red", width=2, dash="dot")))
                     if show_smooth:
-                        fig.add_trace(go.Scatter(x=t, y=us, name="Smooth UNM", line=dict(color="#8B0000", width=3)))
+                        fig.add_trace(go.Scatter(x=t, y=us, name="Unmetered", line=dict(color="#8B0000", width=3)))
                         add_peak_marker(fig, t, us, "Peak UNM", "#8B0000")
 
                 if met_col:
@@ -222,13 +226,14 @@ if st.session_state.get("graph_ready"):
                     if show_raw:
                         fig.add_trace(go.Scatter(x=t, y=m, name="Raw MET", line=dict(color="blue", width=2, dash="dot")))
                     if show_smooth:
-                        fig.add_trace(go.Scatter(x=t, y=ms, name="Smooth MET", line=dict(color="#00008B", width=3)))
+                        fig.add_trace(go.Scatter(x=t, y=ms, name="Metered", line=dict(color="#00008B", width=3)))
                         add_peak_marker(fig, t, ms, "Peak MET", "#00008B")
 
                 if not unm_col and not met_col: raise KeyError("No 'UNMETERED' or 'METERED' header found.")
                 apply_style(fig, f"NA Max RPM Performance - {reg}")
                 current_charts.append(("Max RPM Analysis", fig))
 
+            # NA Idle
             if files["NA_IDLE"]:
                 df = pd.read_csv(files["NA_IDLE"])
                 t = df.iloc[:, 0]
@@ -241,7 +246,7 @@ if st.session_state.get("graph_ready"):
                 if show_raw:
                     fig.add_trace(go.Scatter(x=t, y=p, name="Raw Idle", line=dict(color="red", width=2, dash="dot")))
                 if show_smooth:
-                    fig.add_trace(go.Scatter(x=t, y=ps, name="Smooth Idle", line=dict(color="#8B0000", width=3)))
+                    fig.add_trace(go.Scatter(x=t, y=ps, name="Idle", line=dict(color="#8B0000", width=3)))
                     add_peak_marker(fig, t, ps, "Min PSI", "#8B0000", is_min=True)
                 apply_style(fig, f"Idle RPM Unmetered - {reg}")
                 current_charts.append(("Idle RPM Unmetered", fig))
