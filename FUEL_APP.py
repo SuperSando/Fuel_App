@@ -248,8 +248,8 @@ if st.session_state.get("graph_ready"):
                 if show_smooth:
                     fig.add_trace(go.Scatter(x=t, y=ps, name="Idle", line=dict(color="#8B0000", width=3)))
                     add_peak_marker(fig, t, ps, "Min PSI", "#8B0000", is_min=True)
-                apply_style(fig, f"Idle RPM - {reg}")
-                current_charts.append(("Idle RPM Unmetered", fig))
+                apply_style(fig, f"Idle RPM Unmetered - {reg}")
+                current_charts.append(("Idle RPM", fig))
 
         for title, fig in current_charts:
             st.plotly_chart(fig, use_container_width=True)
