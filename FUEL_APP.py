@@ -230,7 +230,7 @@ if st.session_state.get("graph_ready"):
                         add_peak_marker(fig, t, ms, "Peak MET", "#00008B")
 
                 if not unm_col and not met_col: raise KeyError("No 'UNMETERED' or 'METERED' header found.")
-                apply_style(fig, f"NA Max RPM Performance - {reg}")
+                apply_style(fig, f"Max RPM Metered/Unmetered - {reg}")
                 current_charts.append(("Max RPM Analysis", fig))
 
             # NA Idle
