@@ -231,7 +231,7 @@ if st.session_state.get("graph_ready"):
 
                 if not unm_col and not met_col: raise KeyError("No 'UNMETERED' or 'METERED' header found.")
                 apply_style(fig, f"Max RPM Metered/Unmetered - {reg}")
-                current_charts.append(("Max RPM Analysis", fig))
+                current_charts.append(("Max RPM", fig))
 
             # NA Idle
             if files["NA_IDLE"]:
@@ -248,7 +248,7 @@ if st.session_state.get("graph_ready"):
                 if show_smooth:
                     fig.add_trace(go.Scatter(x=t, y=ps, name="Idle", line=dict(color="#8B0000", width=3)))
                     add_peak_marker(fig, t, ps, "Min PSI", "#8B0000", is_min=True)
-                apply_style(fig, f"Idle RPM Unmetered - {reg}")
+                apply_style(fig, f"Idle RPM - {reg}")
                 current_charts.append(("Idle RPM Unmetered", fig))
 
         for title, fig in current_charts:
